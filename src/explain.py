@@ -26,8 +26,9 @@ than chance. The Stats lab checks that.
 yellow = draw, red = loss**, with the letter inside as well.
 
 **Who was in charge:** the shaded background shows the manager. Green tint is Amorim
-(GW1 to 20), the grey strip marked F is Fletcher's one game (GW21), and the red tint is
-Carrick (GW22 to 38). Hover a square for the opponent, score and the opponent's league
+(GW1 to 20) and red tint is Carrick (GW22 to 38). GW21 was Darren Fletcher's one game as
+interim: it is blank unless you add Fletcher in the Managers filter, where it shows as a
+grey strip marked F. Hover a square for the opponent, score and the opponent's league
 position before kick-off.
 
 **The test underneath:** a Fisher exact test asks whether the mix of wins, draws and
@@ -38,8 +39,8 @@ losses is more different between the two managers than you would expect by chanc
 first match in charge.
 
 **How to read it:** a steeper line means more points per game. The thin grey line is a
-2 points per game pace, roughly what a top four team needs. Lines above it are ahead of
-that pace.
+steady 2 points per game, drawn only as a fixed reference. Lines above it collected
+points faster than that.
 
 **Careful:** Carrick's line is shorter (17 games vs 20). A few results can bend a line
 a lot over this many games.
@@ -98,13 +99,18 @@ the green one, Carrick's games were better (or higher) on those stats.
 on the radar are usually normal variation.
 """,
     "forest": """
-**What it shows:** the gap between the managers for every stat in the chosen area, on one
-common scale, with an uncertainty range for each.
+**What it shows:** the gap between the managers for every stat in the chosen area that has
+a clear "better" direction, on one common scale, with an uncertainty range for each.
 
 - The **dot** is the size of the gap (Cohen's d: the gap divided by the typical
   game-to-game spread, so 0.2 is small, 0.5 medium, 0.8 large).
+- The scale is flipped where lower is better (goals conceded, shots against and so on),
+  so **right is always better for Man Utd under Carrick** and left better under Amorim.
 - The **whisker** is the 95% range of plausible values.
-- Red dots favour Carrick, green favour Amorim, grey are neutral style stats.
+- **Filled** dots changed by more than chance would usually produce; **hollow** dots could
+  be chance.
+- Neutral style stats such as possession have no better or worse, so they are left out
+  here and shown on the Style and drivers page.
 
 **How to read it:** if a whisker crosses the zero line, "no real difference" is still
 plausible. Use the Area buttons to focus on results, attack, defence, passing or duels.
@@ -124,8 +130,10 @@ extreme ones.
     "venue_split": """
 **What it shows:** the selected stat for each manager, split into home and away games.
 
-**How to read it:** compare the home and away dots for each manager, and compare the
-managers at the same venue. The table repeats this for the radar stats.
+**How to read it:** each manager has a line joining their home average (left) to their
+away average (right). A steeper line means a bigger home and away gap. Compare the dots
+at the same venue to compare the managers. The table underneath repeats this for every
+area stat. The sidebar venue filter is ignored here, since both venues are shown.
 
 **Careful:** splitting by venue leaves only 8 to 10 games per group, so these numbers
 move a lot from one result to the next.
@@ -203,9 +211,18 @@ does. The p-value is the share of shuffles at least as extreme as the real gap.
 two spells: home or away, how high the opponent was in the table, and the opponent's
 recent form.
 
+Opponent form is the points per game the opponent took from its previous league games, up
+to the last five (fewer early in the season).
+
 **How to read it:** the sentence gives the gap that remains once those are accounted
 for, with a 95% range. If the range includes zero (or 1 for a rate ratio), the gap is
 not reliable.
+
+**The table:** one row per item in the model. *carrick* is the manager gap (the number
+that matters here). *home* is the extra amount in home games, *opp_position* the change
+for each place lower the opponent sat in the table, *opp_form_ppg* the change for each
+extra point per game of opponent form, and *const* is the starting value the others add
+to. *ci_low* and *ci_high* are the 95% range, *p* the p-value.
 
 - **Linear (OLS)**: the gap in the stat's own units per game.
 - **Poisson / NegBin**: for counts like goals. Gives a **rate ratio**: 1.2 means 20%
@@ -245,7 +262,12 @@ reliable difference.
 
 - **Poisson** assumes goals arrive at a steady random rate.
 - **NegBin** allows more variation between games. If the two agree, either is fine.
-- **Adjusted** rows also account for venue and opponent strength.
+- **Adjusted** (ticked) rows also account for home or away, opponent league position and
+  opponent form. They leave out GW1, which had no league table yet, so Amorim has 19 games.
+- **Bootstrap CI** columns are a second 95% range made by resampling games, as a check
+  on the model's own range.
+- **Poisson dispersion** near 1 means the Poisson assumption fits; NegBin rows leave it
+  blank (None) because NegBin does not need it.
 """,
     # --- Luck vs skill ------------------------------------------------------------
     "goals_vs_xg": """
@@ -254,8 +276,9 @@ reliable difference.
 **How to read it:** the grey diagonal is "scored exactly what the chances were worth".
 Dots above it are games where Man Utd finished better than expected; below, worse.
 
-**Why it matters:** over a few months, scoring above xG often comes from hot finishing
-streaks that tend not to last. A gap in xG is a sturdier sign of a real change.
+**Why it matters:** goals depend on both the chances created (xG) and how they were
+finished. This chart separates the two, so you can see whether a change in goals came
+with a change in chances or not.
 """,
     "conceded_vs_xga": """
 **What it shows:** goals conceded against the xG Man Utd allowed in each game.
@@ -264,26 +287,30 @@ streaks that tend not to last. A gap in xG is a sturdier sign of a real change.
 the chances suggested (good goalkeeping or wasteful opponents). Above it, the opposite.
 
 **The question:** did goals conceded fall under Carrick because Man Utd allowed fewer
-good chances (defending), or because opponents missed more (luck)? The note under the
-chart splits the drop into those two parts.
+good chances, or because more of the chances allowed went unscored? The note under the
+chart compares the fall in goals conceded with the fall in xG against, and says whether
+either gap is reliable.
 """,
     "xpts": """
 **What it shows:** actual points piling up (solid line) against expected points (dotted
 line) for each manager.
 
-**What "expected" means here:** points a side would typically get from that fixture,
-based only on home or away and the opponent's league position. It is about the
-schedule, not how the team played.
+**What "expected" means here:** for each game, the points Man Utd typically got this
+season at that venue against a team in a similar league position, using all of
+Amorim's and Carrick's games together with no manager label. It is about the schedule,
+not how the team played. GW1 is left out because there was no league table yet.
 
-**How to read it:** solid above dotted means more points than the fixtures suggested.
+**How to read it:** solid above dotted means more points than the schedule suggested;
+solid below dotted means fewer.
 """,
     "pythagorean": """
 **What it shows:** the points per game a team "should" get given how many goals it
 scores and concedes, compared with the points it actually got.
 
 **How to read it:** the dot is the expected points per game, with its range. The
-diamond is the actual figure. A diamond well to the right of the dot means results ran
-ahead of the goals, often from winning close games, which tends not to last.
+diamond is the actual figure. A diamond to the right of the range means more points
+than those goal rates usually produce; to the left, fewer. Inside the range means the
+points match the goals.
 """,
     "xgot": """
 **What it shows:** goals scored against xG on target (xGOT) for each game.
@@ -312,25 +339,31 @@ difference (up and down).
 had more big chances and more xG. Anywhere else is "Unlucky": Man Utd matched or beat
 the opponent on at least one of the two but still lost.
 
-**Careful:** single games are very noisy, so this is a description, not a verdict.
+**Careful:** "Deserved" and "Unlucky" are just labels for these two rules, not a
+judgement of the match. Single games are very noisy, so this is a description, not a
+verdict.
 """,
     "buckets": """
-**What it shows:** points per game depending on whether Man Utd had fewer, the same or
-more big chances than the opponent.
+**What it shows:** points per game, with games grouped by big chance difference:
+**Negative** (Man Utd had fewer big chances than the opponent), **Level** (the same
+number) or **Positive** (more).
 
-**How to read it:** if results follow chances, bars should rise from left to right for
-both managers. If one manager earns many points even when out-chanced, that may be luck
-or something the stats miss.
+**How to read it:** if results follow chances, bars rise from left to right for both
+managers. Compare the two managers' bars within each group to see whether one side
+took more points from the same kind of game.
 
-**Careful:** some bars rest on only 2 to 4 games (shown as n above each bar).
+**Careful:** some bars rest on only 2 to 4 games (n is shown on each bar). The whiskers
+are 95% bootstrap ranges; where they overlap, the managers cannot be told apart.
 """,
     "defensive_luck": """
-**What it shows:** opponent big chances against goals conceded per game, and how many
-big chances opponents missed.
+**What it shows:** two charts. The scatter places each game by the opponent's big
+chances (across) and goals conceded (up). The bar chart shows how many big chances
+opponents missed per game (bar = average, dots = single games).
 
-**How to read it:** conceding few big chances is good defending. Opponents missing a
-lot of the chances they do get is mostly luck. If goals conceded fell mainly because
-opponents missed more, expect it to bounce back.
+**How to read it:** dots below the diagonal are games where opponents scored fewer goals
+than they had big chances. Fewer big chances conceded is about what the defence allowed.
+How many of those chances opponents missed is largely down to the opponent's finishing
+and the goalkeeper, so the two charts separate those parts.
 """,
     # --- Style page and Stats lab headline ---------------------------------------
     "improvement": """
@@ -357,20 +390,21 @@ it, because the change also coincides with a different part of the season.
 2. **All together:** can a simple model tell Carrick games from Amorim games using only
    style stats, better than guessing?
 
-If both say yes, the style changed in measurable ways. If neither does, there is no clear
-evidence it changed.
+If both say yes, there are signs the games looked different on these stats. If neither
+does, there is no clear evidence of a difference. Either way it describes the games, not
+why they differed.
 """,
     "style_shift": """
 **What it shows:** how each of the 32 style stats moved under Carrick, grouped by area.
 
 **How to read it:**
-- Dots on the **right** (red): Carrick's games had more of this stat.
-- Dots on the **left** (green): Amorim's games had more.
+- Dots on the **right**: Carrick's games had more of this stat.
+- Dots on the **left**: Amorim's games had more.
+- The dots are not in manager colours, because more is not better or worse here.
 - **Filled** dots changed by more than chance would usually produce; **hollow** dots could
   be chance.
 - The further from the middle, the bigger the change (0.5 medium, 0.8 large).
-
-Here "more" is not better or worse: this chart is about how the team played.
+- The whisker is the 95% range of plausible values.
 """,
     "classifier": """
 **What it shows:** whether the two spells can be told apart from style stats alone.
@@ -384,23 +418,26 @@ game is tested once.
 - **Chance of a fluke:** the same model is rerun 1,000 times with the manager labels
   shuffled at random. This is how often it did as well by luck.
 
-**How to read it:** accuracy well above guessing with a small fluke chance means the
-playing style really did differ between the spells. The sentence underneath lists what
-gives each spell away.
+**How to read it:** the chart shows the accuracy of all the shuffled runs (grey) and the
+real accuracy (white line). Accuracy well above guessing with a small fluke chance means
+the games in the two spells looked different on these stats. The sentence underneath
+lists which stats the model leaned on.
 
-**Careful:** the model can also pick up anything else that changed mid-season.
+**Careful:** it does not say why the games differed. The model can also pick up anything
+else that changed mid-season, such as opponents or the time of year.
 """,
     # --- Style and drivers -------------------------------------------------------
     "pca": """
 **What it shows:** every game placed on a "style map" built from all 32 style stats at once.
 
-**How it works:** PCA squeezes the style stats into two summary scores (the axes). Games
-that were played in a similar way sit close together. KMeans then splits the games into
-two natural groups (dot shapes) without being told who the manager was.
+**How it works:** PCA squeezes the style stats into two summary scores (the axes; the
+percentage says how much of the game-to-game variation each one captures). Games with
+similar stats sit close together. KMeans then splits the games into two groups (circles
+and squares) without being told who the manager was. Colour is the manager.
 
 **How to read it:** if red and green dots sit in separate areas, and the shapes line up
-with the colours, the two managers' teams played differently. If the colours are mixed
-together, any change in style is subtle. The card underneath says which it is.
+with the colours, the two spells' games had different stat profiles. If the colours are
+mixed together, any difference is small. The card underneath says which it is.
 """,
     "correlation": """
 **What it shows:** which stats tend to be higher in games where Man Utd got more points.
@@ -408,15 +445,17 @@ together, any change in style is subtle. The card underneath says which it is.
 **How to read it:** rho runs from -1 to +1. Positive means higher values go with more
 points. The whisker is the 95% range. Holm p corrects for testing many stats.
 
-**Careful:** this does not mean the stat causes points. Teams that are winning often
-sit back, which changes possession and shots, so cause and effect run both ways.
+**Careful:** this does not mean the stat causes points. The scoreline can also change
+the stats (a team protecting a lead may have less of the ball), so the link can run
+either way.
 """,
     "lasso": """
 **What it shows:** a model that tries to predict points from all the stats together,
 built to keep only the few stats that matter most.
 
 **How to read it:** each bar is how many extra points per game go with a typical
-increase in that stat, holding the others fixed. Hover for how often the stat was kept
+increase in that stat (one standard deviation, the usual game-to-game swing), holding
+the others fixed. Stats the model dropped have no bar. Hover for how often the stat was kept
 when the model was refitted on reshuffled data (higher is more stable).
 
 **The key number:** cross-validated R squared, which tests the model on games it did not

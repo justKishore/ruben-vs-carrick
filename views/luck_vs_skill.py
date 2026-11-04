@@ -47,9 +47,8 @@ c = ui.run_f(f, "compare", "Goals minus xG")
 ui.chart(C.xy_scatter(df, "xG", "MU goals", "xG", "Goals scored"), "goals_vs_xg",
          f"Carrick's side scored {over_under(c.mean_carrick)} what its chances were worth; "
          f"Amorim's scored {over_under(c.mean_amorim)}. "
-         + ("Carrick's side finished further above its chances, and finishing runs like this "
-            "often fade. " if c.mean_carrick > c.mean_amorim else
-            "Amorim's side finished further above its chances. ")
+         + ("Carrick's side finished further above its chances. " if c.mean_carrick > c.mean_amorim
+            else "Amorim's side finished further above its chances. ")
          + sure(c),
          f"Goals minus xG: {gap(c)}.")
 
@@ -59,12 +58,15 @@ ga = ui.run_f(f, "compare", "Opp goals")
 xga = ui.run_f(f, "compare", "Opp xG")
 over = ui.run_f(f, "compare", "Conceded minus xG against")
 if ga.diff < 0:
-    share = min(max(xga.diff / ga.diff, 0), 1) if xga.diff < 0 else 0.0
     conceded_text = (
-        f"Goals conceded fell by {-ga.diff:.2f} per game under Carrick, but the quality of chances "
-        f"allowed (xG against) fell by only {max(-xga.diff, 0):.2f}. So about {share:.0%} of the "
-        f"improvement came from allowing fewer good chances and about {1 - share:.0%} from "
-        "goalkeeping or opponents missing. That second part is the kind that tends not to last.")
+        f"Goals conceded fell by {-ga.diff:.2f} per game under Carrick, while the quality of "
+        f"chances allowed (xG against) fell by {max(-xga.diff, 0):.2f}. "
+        + ("Most of the drop is not matched by fewer chances conceded, which points towards "
+           "goalkeeping or opponent finishing, but with this few games the data cannot split the "
+           "two reliably."
+           if -xga.diff < 0.5 * -ga.diff else
+           "Much of the drop is matched by fewer chances conceded, though with this few games "
+           "neither gap is reliably different from zero."))
 else:
     conceded_text = (f"Goals conceded did not fall under Carrick ({ga.mean_carrick:.2f} vs "
                      f"{ga.mean_amorim:.2f} per game).")
@@ -82,9 +84,10 @@ xp["cum_xpts"] = xp.groupby("Manager")["xPts"].cumsum()
 pc = ui.run_f(f, "compare", "Points minus xPts")
 ui.chart(C.xpts_chart(xp), "points_vs_xpts",
          f"Given who they played and where, Carrick's side got {over_under(pc.mean_carrick, 'points')} "
-         f"what an average spell would expect, and Amorim's {over_under(pc.mean_amorim, 'points')}. "
-         + ("Carrick outperformed the fixtures more than Amorim did. " if pc.diff > 0 else
-            "Amorim outperformed the fixtures more than Carrick did. ")
+         "what Man Utd's season-wide record against similar opponents at the same venue would "
+         f"suggest, and Amorim's {over_under(pc.mean_amorim, 'points')}. "
+         + ("Carrick's side beat its schedule by more than Amorim's did. " if pc.diff > 0 else
+            "Amorim's side beat its schedule by more than Carrick's did. ")
          + sure(pc),
          f"Expected points use only venue and opponent pre-match position. Points minus xPts: "
          f"{gap(pc)}. GW1 has no pre-match position; the model is fitted on the same games it scores.")
@@ -99,8 +102,8 @@ ui.chart(C.ppg_interval_chart(py.reset_index()), "pythagorean",
                    f"{py.at[m, 'Pythagorean PPG']:.2f} points per game and they got "
                    f"{py.at[m, 'Actual PPG']:.2f}" for m in py.index)
          + ". "
-         + (f"{' and '.join(lucky)} earned more points than the scorelines usually produce, "
-            "typically from winning tight games, which rarely holds up."
+         + (f"{' and '.join(lucky)}'s points sit above the expected range: more points than "
+            "those goal rates usually produce."
             if lucky else
             "Actual points sit inside the expected ranges, so results broadly match the goals."),
          "Expected points treat goals for and against per game as Poisson rates; ranges are 95% "
@@ -116,7 +119,7 @@ ui.chart(C.xy_scatter(df, "xG on target (xGOT)", "MU goals", "xG on target (xGOT
                       "Goals scored"), "goals_vs_xgot",
          f"Once shots were on target, Carrick's side scored {over_under(c.mean_carrick)} what the "
          f"shots were worth, Amorim's {over_under(c.mean_amorim)}. "
-         + ("Carrick's side beat goalkeepers more often than its shots deserved. "
+         + ("Carrick's side scored more than the quality of its shots on target suggested. "
             if c.mean_carrick > c.mean_amorim else "")
          + sure(c),
          f"Goals minus xGOT: {gap(c)}.")
@@ -188,20 +191,25 @@ for mgr in (AMORIM, CARRICK):
         parts.append(f"{C.short(mgr)} took {neg['PPG']:.2f} points per game when out-chanced "
                      f"(n={int(neg['games'])}) and {pos['PPG']:.2f} when creating more "
                      f"(n={int(pos['games'])})")
+def _bucket_compare() -> str:
+    if len(parts) < 2:
+        return "Results followed chance quality in a similar way under both."
+    pa, pc_ = b.loc[(AMORIM, "Positive")], b.loc[(CARRICK, "Positive")]
+    overlap = pa["ci_low"] <= pc_["ci_high"] and pc_["ci_low"] <= pa["ci_high"]
+    hedge = (" The ranges overlap, so this could easily be chance." if overlap else
+             " The ranges do not overlap, but the cells are small.")
+    if abs(pc_["PPG"] - pa["PPG"]) <= 0.25:
+        return "Results followed chance quality in a similar way under both." + hedge
+    lead, trail = (CARRICK, AMORIM) if pc_["PPG"] > pa["PPG"] else (AMORIM, CARRICK)
+    return (f"When creating more big chances, {C.short(lead)}'s side took more points per game "
+            f"({b.loc[(lead, 'Positive'), 'PPG']:.2f}) than {C.short(trail)}'s "
+            f"({b.loc[(trail, 'Positive'), 'PPG']:.2f})." + hedge)
+
+
 ui.chart(C.bucket_chart(buckets), "bc_buckets",
-         "; ".join(parts) + ". "
-         + (f"Creating more big chances turned into more points under Carrick "
-            f"({b.loc[(CARRICK, 'Positive'), 'PPG']:.2f}) than under Amorim "
-            f"({b.loc[(AMORIM, 'Positive'), 'PPG']:.2f})."
-            if len(parts) == 2 and b.loc[(CARRICK, "Positive"), "PPG"]
-            > b.loc[(AMORIM, "Positive"), "PPG"] + 0.25 else
-            f"Creating more big chances turned into more points under Amorim "
-            f"({b.loc[(AMORIM, 'Positive'), 'PPG']:.2f}) than under Carrick "
-            f"({b.loc[(CARRICK, 'Positive'), 'PPG']:.2f})."
-            if len(parts) == 2 and b.loc[(AMORIM, "Positive"), "PPG"]
-            > b.loc[(CARRICK, "Positive"), "PPG"] + 0.25 else
-            "Results followed chance quality in a similar way under both."),
-         "Some bars rest on 2 to 4 games, so treat individual bars with caution.")
+         "; ".join(parts) + ". " + _bucket_compare(),
+         "Some bars rest on 2 to 4 games, so treat individual bars with caution. Whiskers are "
+         "95% bootstrap CIs, resampling games within each bar.")
 
 # 4. Defensive luck
 ui.section("4. Defensive luck", "defensive_luck")
@@ -213,12 +221,14 @@ ui.chart(C.xy_scatter(df, "Opp Big chances", "Opp goals", "Opponent big chances"
          f"Opponents created {opp_bc.mean_carrick:.2f} big chances per game against Carrick's side "
          f"vs {opp_bc.mean_amorim:.2f} against Amorim's, and scored {opp_conv.conversion_carrick:.0%} "
          f"of them vs {opp_conv.conversion_amorim:.0%}. "
-         + (("Conceding fewer big chances is a defensive improvement larger than chance; "
+         + (("The drop in big chances conceded is larger than chance would usually produce. "
              if reliable(opp_bc) else
-             "Conceding fewer big chances points to better defending, though that gap could be "
-             "chance; ") if opp_bc.diff < 0 else "")
-         + ("opponents finishing worse is luck, not defending." if opp_conv.diff < 0 else
-            "opponents finished no worse, so luck is not doing the work here."),
+             "The drop in big chances conceded could easily be chance. ") if opp_bc.diff < 0 else "")
+         + ("The lower opponent conversion depends mostly on opponent finishing and the "
+            "goalkeeper rather than on how many chances were allowed."
+            if opp_conv.diff < 0 else
+            "Opponents converted no less often, so fewer goals conceded did not come from "
+            "opponents missing more."),
          f"Opponent big chances difference {opp_bc.diff:+.2f} (permutation p="
          f"{S.fmt_p(opp_bc.p_permutation)}). Opponent conversion {opp_conv.scored_carrick} of "
          f"{opp_conv.created_carrick} vs {opp_conv.scored_amorim} of {opp_conv.created_amorim}, "

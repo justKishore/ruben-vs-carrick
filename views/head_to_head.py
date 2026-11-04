@@ -41,14 +41,24 @@ area = st.segmented_control("Area", ["All areas", *S.AREA_GROUPS], default="All 
                             key="forest_area", required=True)
 metrics = S.area_metrics() if area == "All areas" else list(S.AREA_GROUPS[area])
 fd = S.forest_data(area_table[area_table["metric"].isin(metrics)])
-event = ui.chart(
-    C.forest_plot(fd), f"forest_{area.replace(' ', '_').lower()}",
-    S.group_finding(area_table, metrics),
-    f"{len(fd)} stats shown; Holm correction applied across all {len(area_table)} area stats. "
-    "Whiskers are 95% bootstrap CIs; a whisker crossing zero means no difference is still "
-    "plausible. Click a dot to open its trend.",
-    on_select="rerun", selection_mode=("points",),
-)
+n_shown = int((fd["direction"] != 0).sum())
+n_neutral = len(fd) - n_shown
+event = None
+if n_shown:
+    event = ui.chart(
+        C.forest_plot(fd), f"forest_{area.replace(' ', '_').lower()}",
+        S.group_finding(area_table, metrics),
+        f"{n_shown} stats with a clear better direction shown"
+        + (f"; {n_neutral} neutral style stats (no better or worse) are on the Style page"
+           if n_neutral else "")
+        + f". Holm correction applied across all {len(area_table)} area stats. Filled dots are "
+        "clear or possible differences, hollow dots could be chance. Whiskers are 95% "
+        "bootstrap CIs; a whisker crossing zero means no difference is still plausible. "
+        "Click a dot to open its trend.",
+        on_select="rerun", selection_mode=("points",),
+    )
+else:
+    st.info("This area has only neutral style stats. See the Style and drivers page.")
 picked = event.selection.points if event and event.selection else []
 clicked = picked[0]["customdata"][0] if picked else None
 # The chart keeps its selection, so only act on a new click.
@@ -88,7 +98,8 @@ if not vs.empty:
               else "The home and away gap was bigger under Amorim" if abs(gap_a) > abs(gap_c) * 1.25
               else "Both managers had a similar home and away gap")
     ui.chart(C.venue_split_chart(vs, S.metric_label(f.metric), kind), "venue_split",
-             f"{S.metric_label(f.metric)}: " + "; ".join(parts) + f". {bigger}.",
+             f"{S.metric_label(f.metric)}: " + "; ".join(parts) + f". {bigger}, though with "
+             "8 to 10 games per group this could easily be chance.",
              "Each cell has only 8 to 10 games, so these gaps are very noisy. The venue filter "
              "is ignored here.")
     vs_all = S.venue_split(venue_df, S.style_metrics())

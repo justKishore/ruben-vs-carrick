@@ -13,7 +13,7 @@ from src import stats as S
 from src.explain import EXPLAIN
 from src.load import load_match_data
 
-PAGES = Path(__file__).resolve().parents[1] / "pages"
+PAGES = Path(__file__).resolve().parents[1] / "views"
 
 
 def section_keys() -> set[str]:

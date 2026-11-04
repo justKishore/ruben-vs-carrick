@@ -40,9 +40,9 @@ ui.section("The short answer", "style_answer")
 model_sees_it = clf.p_value < S.ALPHA
 n_clear = int((table["verdict"] == S.CLEAR).sum())
 if model_sees_it and len(moved):
-    answer = "Yes, the style shifted in a few specific ways."
+    answer = "Some signs the games looked different, in a few specific ways."
 elif model_sees_it:
-    answer = "Probably, but no single stat changed clearly."
+    answer = "Some signs the games looked different, but no single stat changed clearly."
 elif n_clear:
     answer = "A little: a few individual stats changed, but the overall style is hard to tell apart."
 else:
@@ -50,7 +50,7 @@ else:
 with st.container(border=True):
     st.markdown(f"### {answer}")
     st.markdown(ui.clean(
-        f"A simple model shown only style stats picked the right manager for "
+        f"A simple model given only style stats picked the right manager for "
         f"{clf.accuracy:.0%} of games, against {clf.baseline:.0%} from guessing "
         f"(p={S.fmt_p(clf.p_value)}). "
         + (f"The biggest changes in Carrick's games: {change_words(moved)}. " if len(moved) else "")

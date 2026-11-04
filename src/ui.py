@@ -131,7 +131,7 @@ def current_filters() -> Filters:
 def open_metric_trend(metric: str) -> None:
     """Switch to the trend page with this metric selected."""
     st.session_state[PENDING_METRIC] = metric
-    st.switch_page("pages/trend.py")
+    st.switch_page("views/trend.py")
 
 
 # ---------------------------------------------------------------------------

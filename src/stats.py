@@ -549,6 +549,8 @@ def forest_data(table: pd.DataFrame) -> pd.DataFrame:
     out["d_better"] = out["cohens_d"] * sign
     lo, hi = out["d_ci_low"] * sign, out["d_ci_high"] * sign
     out["d_better_low"], out["d_better_high"] = np.minimum(lo, hi), np.maximum(lo, hi)
+    out["verdict"] = [verdict(r.p_permutation, r.p_permutation_holm, r.diff_ci_low, r.diff_ci_high)
+                      for r in out.itertuples()]
     return out.sort_values("d_better", key=np.abs, ascending=False, na_position="last")
 
 
@@ -1135,14 +1137,30 @@ def bc_bucket(bc_diff: float) -> str:
     return "Level" if bc_diff == 0 else "Positive"
 
 
-def ppg_by_bc_bucket(df: pd.DataFrame) -> pd.DataFrame:
-    """Games, points and PPG per manager by big chance difference bucket."""
+def ppg_by_bc_bucket(
+    df: pd.DataFrame, n_boot: int = N_RESAMPLES, seed: int = SEED
+) -> pd.DataFrame:
+    """Games, points and PPG per manager by big chance difference bucket, with a
+    95% percentile bootstrap CI for PPG (games resampled within each cell)."""
     buckets = pd.CategoricalDtype(["Negative", "Level", "Positive"], ordered=True)
     games = df[df["Manager"].isin(TESTED)].assign(
         bucket=lambda d: d["BC diff"].map(bc_bucket).astype(buckets))
     out = games.groupby(["Manager", "bucket"], observed=False).agg(
         games=("GW", "size"), points=("Points", "sum")).reset_index()
     out["PPG"] = (out["points"] / out["games"]).where(out["games"] > 0)
+    rng = np.random.default_rng(seed)
+    lows, highs = [], []
+    for r in out.itertuples():
+        pts = games.loc[(games["Manager"] == r.Manager) & (games["bucket"] == r.bucket),
+                        "Points"].to_numpy(dtype=float)
+        if len(pts) == 0:
+            lows.append(np.nan)
+            highs.append(np.nan)
+            continue
+        means = rng.choice(pts, size=(n_boot, len(pts)), replace=True).mean(axis=1)
+        lows.append(float(np.percentile(means, 2.5)))
+        highs.append(float(np.percentile(means, 97.5)))
+    out["ci_low"], out["ci_high"] = lows, highs
     return out
 
 
@@ -1460,8 +1478,9 @@ def improvement_summary(table: pd.DataFrame, wdl: WDLTest) -> tuple[str, str]:
         f"{fmt_p(wdl.p_fisher)}). "
         f"The underlying chance balance (xG difference) went from {xgd.mean_amorim:+.2f} to "
         f"{xgd.mean_carrick:+.2f} per game, "
-        + ("so results improved more than the chances did, which points to finishing, "
-           "goalkeeping or luck rather than a clear change in how matches were played. "
+        + ("so results improved more than the chances did. That pattern fits finishing, "
+           "goalkeeping or luck better than a clear change in the chances, though this data "
+           "cannot say which. "
            if pts["diff"] > 0 and abs(xgd.cohens_d) < 0.2 else
            "in line with the change in results. " if np.sign(xgd["diff"]) == np.sign(pts["diff"])
            else "moving the opposite way to results. ")

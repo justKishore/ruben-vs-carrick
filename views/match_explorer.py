@@ -40,7 +40,7 @@ event = ui.table(
     column_config={
         "Date": st.column_config.DateColumn(format="DD MMM YYYY"),
         "xG": num(format="%.2f"), "xG against": num(format="%.2f"),
-        "Possession": st.column_config.ProgressColumn(format="percent", min_value=0, max_value=1),
+        "Possession": st.column_config.NumberColumn(format="percent"),
         "Opp position": num("Opp pre-match position", format="%d",
                             help="Blank for GW1: no table before the first game."),
         "Expected points": num(format="%.2f",

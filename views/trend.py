@@ -1,5 +1,6 @@
 """Trend explorer: per-game values, rolling means, era means, change points."""
 
+import numpy as np
 import streamlit as st
 
 from src import charts as C
@@ -37,9 +38,18 @@ cps = S.change_points(df, f.metric) if show_cp else []
 eras_text = "; ".join(
     f"{C.short(r.Manager)} mean {S.fmt_value(r.mean, kind)} (n={r.n})" for r in eras.itertuples())
 season_comp = ui.run_f(f, "compare", f.metric)
+spread_vs_gap = (
+    "Single games swing much more than the gap between the two averages, so the dots of the "
+    "two spells overlap heavily."
+    if np.isfinite(season_comp.cohens_d) and abs(season_comp.cohens_d) < 0.5 else
+    "The gap between the two averages is large compared with game-to-game swings."
+    if np.isfinite(season_comp.cohens_d) else "")
 event = ui.chart(
     C.trend_chart(points, eras, label, kind, cps, size_by_opp), "trend_chart",
-    S.plain_finding(season_comp),
+    f"The flat lines show each spell's average: "
+    + "; ".join(f"{C.short(r.Manager)} {S.fmt_value(r.mean, kind)} per game"
+                for r in eras.itertuples())
+    + f". {spread_vs_gap} The test is in the panel below.",
     f"{eras_text}. Rolling means smooth noise, but with this few games a run of 3 or 4 unusual "
     "matches moves them a lot.",
     on_select="rerun", selection_mode=("box",),

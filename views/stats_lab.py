@@ -210,8 +210,8 @@ if ac.ljung_box.empty:
 else:
     min_p = float(ac.ljung_box["lb_pvalue"].min())
     ui.chart(C.acf_chart(ac.acf, ac.conf_band), "acf",
-             (f"{label} does not come in streaks: one game tells you little about the next, so "
-              "treating games as independent (as the tests do) is reasonable."
+             (f"No sign of streaks in {label}: one game told you little about the next, "
+              "so treating games as independent (as the tests do) looks reasonable."
               if min_p >= S.ALPHA else
               f"{label} shows some streakiness between nearby games, so the tests on this page "
               "may be somewhat overconfident for this stat."),
@@ -231,7 +231,7 @@ with c2:
         f"Carrick won {wdl.win_rate_carrick:.0%} of games against {wdl.win_rate_amorim:.0%} for "
         "Amorim. "
         + ("Even a swing that big in wins, draws and losses can happen by chance over 20 and 17 "
-           "games, so it is not statistically significant."
+           "games, so it is not a reliable difference."
            if wdl.p_fisher >= S.ALPHA else
            "The change in the mix of results is larger than chance would usually produce."),
         f"Fisher exact (2 x 3) p={S.fmt_p(wdl.p_fisher)}, Cramer's V {wdl.cramers_v:.2f}. "

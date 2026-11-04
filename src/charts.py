@@ -289,14 +289,17 @@ def _rgba(hex_color: str, alpha: float) -> str:
 
 
 def forest_plot(fd: pd.DataFrame) -> go.Figure:
-    """Standardised differences (d) with bootstrap CIs. Points are coloured by
-    the manager they favour; neutral stats are grey. customdata[0] is the key."""
-    fd = fd.dropna(subset=["d_better"]).iloc[::-1]  # biggest effect on top
-    colour = np.where(fd["direction"] == 0, NEUTRAL,
-                      np.where(fd["d_better"] > 0, COLORS[CARRICK], COLORS[AMORIM]))
+    """Standardised differences (d) with bootstrap CIs, signed so that positive
+    is better for Man Utd under Carrick. Only directional stats are drawn (neutral
+    style stats have no 'better' and live on the Style page). Dots are coloured by
+    the manager they favour; filled = clear or possible difference, hollow = could
+    be chance. customdata[0] is the metric key."""
+    fd = fd[fd["direction"] != 0].dropna(subset=["d_better"]).iloc[::-1]  # biggest on top
+    colour = np.where(fd["d_better"] > 0, COLORS[CARRICK], COLORS[AMORIM])
+    solid = (fd["verdict"] != "No reliable difference") if "verdict" in fd else np.ones(len(fd), bool)
     fig = go.Figure(go.Scatter(
         x=fd["d_better"], y=fd["label"], mode="markers",
-        marker=dict(size=10, color=colour, line=_ring()),
+        marker=dict(size=11, color=np.where(solid, colour, SURFACE), line=dict(color=colour, width=2)),
         error_x=dict(type="data", symmetric=False,
                      array=fd["d_better_high"] - fd["d_better"],
                      arrayminus=fd["d_better"] - fd["d_better_low"],
@@ -312,11 +315,11 @@ def forest_plot(fd: pd.DataFrame) -> go.Figure:
     ))
     fig.add_vline(x=0, line=dict(color=AXIS, width=1))
     for mgr, x, anchor in ((AMORIM, -0.02, "right"), (CARRICK, 0.02, "left")):
-        fig.add_annotation(x=x, y=1.0, xref="x", yref="paper", text=f"favours {short(mgr)}",
+        fig.add_annotation(x=x, y=1.0, xref="x", yref="paper", text=f"better under {short(mgr)}",
                            showarrow=False, xanchor=anchor, yanchor="bottom",
                            font=dict(color=COLORS[mgr], size=12))
-    base_layout(fig, height=max(320, 26 * len(fd) + 110),
-                x_title="Standardised difference, Cohen's d (grey: neutral stat, + means higher under Carrick)")
+    base_layout(fig, height=max(320, 26 * len(fd) + 110), legend=False,
+                x_title="Cohen's d, signed so right is better for Man Utd under Carrick")
     fig.update_yaxes(showgrid=False, automargin=True)
     fig.update_layout(margin=dict(l=24, r=24, t=40, b=56))
     return fig
@@ -426,11 +429,11 @@ def style_shift_chart(table: pd.DataFrame) -> go.Figure:
     """
     t = table.dropna(subset=["cohens_d"]).iloc[::-1]
     solid = t["verdict"] != "No reliable difference"
-    colour = np.where(t["cohens_d"] > 0, COLORS[CARRICK], COLORS[AMORIM])
+    # One neutral colour: "more" is not better here, so manager colours would mislead.
     fig = go.Figure(go.Scatter(
         x=t["cohens_d"], y=[t["area"], t["label"]], mode="markers", showlegend=False,
-        marker=dict(size=11, color=np.where(solid, colour, SURFACE),
-                    line=dict(color=colour, width=2)),
+        marker=dict(size=11, color=np.where(solid, TEXT, SURFACE),
+                    line=dict(color=TEXT, width=2)),
         error_x=dict(type="data", symmetric=False, array=t["d_ci_high"] - t["cohens_d"],
                      arrayminus=t["cohens_d"] - t["d_ci_low"], color=MUTED, thickness=1.2, width=0),
         customdata=np.stack([t["d_ci_low"], t["d_ci_high"], t["verdict"]], axis=-1),
@@ -441,7 +444,7 @@ def style_shift_chart(table: pd.DataFrame) -> go.Figure:
     for mgr, x, anchor in ((AMORIM, -0.02, "right"), (CARRICK, 0.02, "left")):
         fig.add_annotation(x=x, y=1.0, xref="x", yref="paper", text=f"more in {short(mgr)} games",
                            showarrow=False, xanchor=anchor, yanchor="bottom",
-                           font=dict(color=COLORS[mgr], size=12))
+                           font=dict(color=MUTED, size=12))
     base_layout(fig, height=max(360, 24 * len(t) + 120), legend=False,
                 x_title="Change in Carrick's games, in standard deviations (Cohen's d). Filled dot: reliable or possible change")
     fig.update_yaxes(showgrid=False, automargin=True, tickfont=dict(color=TEXT))
@@ -587,15 +590,20 @@ def bucket_chart(t: pd.DataFrame) -> go.Figure:
         fig.add_trace(go.Bar(
             x=g["bucket"].astype(str), y=g["PPG"], name=short(mgr),
             marker=dict(color=COLORS[mgr], line=dict(color=SURFACE, width=2)),
-            text=[f"n={n}" for n in g["games"]], textposition="outside",
-            textfont=dict(color=MUTED, size=11), cliponaxis=False,
-            customdata=np.stack([g["games"], g["points"]], axis=-1),
-            hovertemplate=("%{x}: %{y:.2f} PPG<br>%{customdata[1]} pts from %{customdata[0]} games"
+            text=[f"n={n}" for n in g["games"]], textposition="inside", insidetextanchor="start",
+            textfont=dict(color=TEXT, size=11), cliponaxis=False,
+            error_y=(dict(type="data", symmetric=False, array=g["ci_high"] - g["PPG"],
+                          arrayminus=g["PPG"] - g["ci_low"], color=TEXT, thickness=1.2, width=4)
+                     if "ci_low" in g else None),
+            customdata=np.stack([g["games"], g["points"],
+                                 g.get("ci_low", g["PPG"]), g.get("ci_high", g["PPG"])], axis=-1),
+            hovertemplate=("%{x}: %{y:.2f} PPG (95% CI %{customdata[2]:.2f} to %{customdata[3]:.2f})"
+                           "<br>%{customdata[1]} pts from %{customdata[0]} games"
                            f"<extra>{short(mgr)}</extra>")))
     base_layout(fig, height=360, x_title="Big chance difference in the game",
-                y_title="Points per game")
+                y_title="Points per game (whisker: 95% bootstrap CI)")
     fig.update_layout(barmode="group", bargap=0.35, bargroupgap=0.08)
-    fig.update_yaxes(range=[0, 3.3])
+    fig.update_yaxes(range=[0, 3.1])
     return fig
 
 
@@ -611,11 +619,19 @@ def pca_chart(scores: pd.DataFrame, explained: np.ndarray) -> go.Figure:
     for mgr in _managers_in(scores):
         g = scores[scores["Manager"] == mgr]
         fig.add_trace(go.Scatter(
-            x=g["PC1"], y=g["PC2"], mode="markers", name=short(mgr),
+            x=g["PC1"], y=g["PC2"], mode="markers", name=short(mgr), showlegend=False,
             marker=dict(size=11, color=COLORS[mgr], line=_ring(),
                         symbol=[CLUSTER_SYMBOLS[c % len(CLUSTER_SYMBOLS)] for c in g["cluster"]]),
             customdata=np.stack([g["GW"], g["cluster"] + 1], axis=-1),
-            hovertemplate="GW%{customdata[0]}, cluster %{customdata[1]}<extra></extra>"))
+            hovertemplate=f"GW%{{customdata[0]}} ({short(mgr)}), group %{{customdata[1]}}<extra></extra>"))
+    # Legend-only entries: colour = manager, shape = KMeans group.
+    for mgr in _managers_in(scores):
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers", name=short(mgr),
+                                 marker=dict(size=11, color=COLORS[mgr], symbol="circle")))
+    for c in sorted(scores["cluster"].unique()):
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers", name=f"Group {c + 1}",
+                                 marker=dict(size=11, color=NEUTRAL,
+                                             symbol=CLUSTER_SYMBOLS[c % len(CLUSTER_SYMBOLS)])))
     return base_layout(fig, height=420,
                        x_title=f"PC1 ({explained[0]:.0%} of variance)",
                        y_title=f"PC2 ({explained[1]:.0%} of variance)")

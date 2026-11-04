@@ -91,3 +91,23 @@ def test_traces_use_manager_colours(df: pd.DataFrame) -> None:
     by_name = {t.name: t.line.color for t in fig.data}
     assert by_name["Carrick"] == C.COLORS[CARRICK]
     assert by_name["Amorim"] == C.COLORS[AMORIM]
+
+
+def test_forest_plot_drops_neutral_and_marks_verdict(df: pd.DataFrame) -> None:
+    t = df[df["Manager"].isin(S.TESTED)]
+    table = S.comparison_table(t, ["xG", "Opp goals", "Possession %"], n_resamples=FAST)
+    fd = S.forest_data(table)
+    assert "verdict" in fd
+    fig = C.forest_plot(fd)
+    labels = list(fig.data[0].y)
+    assert S.metric_label("Possession %") not in labels
+    assert len(labels) == 2
+
+
+def test_style_shift_chart_has_no_manager_colours(df: pd.DataFrame) -> None:
+    t = df[df["Manager"].isin(S.TESTED)]
+    table = S.comparison_table(t, ["xG", "Possession %"], n_resamples=FAST)
+    table["verdict"] = S.NONE
+    table["area"] = "Attack"
+    line = C.style_shift_chart(table).data[0].marker.line.color
+    assert line not in (C.COLORS[AMORIM], C.COLORS[CARRICK])

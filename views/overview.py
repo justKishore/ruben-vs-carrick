@@ -91,8 +91,8 @@ ui.chart(
     C.cumulative_points_chart(cum), "cumulative_points",
     f"Carrick's side collected points at {pts.mean_carrick:.2f} per game, {pace} a 2 points "
     f"per game pace, compared with {pts.mean_amorim:.2f} under Amorim. "
-    + ("The gap looks large but is not statistically significant: the plausible range still "
-       "includes zero." if not S.is_reliable(pts.p_permutation, pts.diff_ci_low, pts.diff_ci_high)
+    + ("The gap looks large, but the plausible range for it still includes zero, so it "
+       "could be chance." if not S.is_reliable(pts.p_permutation, pts.diff_ci_low, pts.diff_ci_high)
        else "The gap is larger than chance would usually produce."),
     f"Difference {pts.diff:+.2f} PPG (95% CI {ui.fmt_ci(pts.diff_ci_low, pts.diff_ci_high)}, "
     f"permutation p={S.fmt_p(pts.p_permutation)}, n={pts.n_carrick} vs {pts.n_amorim}).",

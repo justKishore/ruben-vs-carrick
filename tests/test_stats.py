@@ -352,3 +352,9 @@ def test_style_classifier_runs(df: pd.DataFrame) -> None:
     assert r.baseline == pytest.approx(20 / 37)
     assert (r.n_amorim, r.n_carrick) == (20, 17)
     assert len(r.null_scores) == 20
+
+
+def test_ppg_by_bc_bucket_ci_brackets_ppg(df: pd.DataFrame) -> None:
+    t = S.ppg_by_bc_bucket(df, n_boot=500).dropna(subset=["PPG"])
+    assert ((t["ci_low"] <= t["PPG"] + 1e-9) & (t["PPG"] <= t["ci_high"] + 1e-9)).all()
+    assert ((t["ci_low"] >= 0) & (t["ci_high"] <= 3)).all()

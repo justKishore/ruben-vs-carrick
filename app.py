@@ -11,14 +11,14 @@ st.set_page_config(
 )
 
 pages = [
-    st.Page("pages/overview.py", title="Overview", icon=":material/dashboard:", default=True),
-    st.Page("pages/trend.py", title="Trend explorer", icon=":material/show_chart:"),
-    st.Page("pages/head_to_head.py", title="Head to head", icon=":material/compare_arrows:"),
-    st.Page("pages/stats_lab.py", title="Stats lab", icon=":material/science:"),
-    st.Page("pages/luck_vs_skill.py", title="Luck vs skill", icon=":material/casino:"),
-    st.Page("pages/style_drivers.py", title="Style and drivers", icon=":material/scatter_plot:"),
-    st.Page("pages/match_explorer.py", title="Match explorer", icon=":material/table_view:"),
-    st.Page("pages/methods.py", title="Methods and caveats", icon=":material/menu_book:"),
+    st.Page("views/overview.py", title="Overview", icon=":material/dashboard:", default=True),
+    st.Page("views/trend.py", title="Trend explorer", icon=":material/show_chart:"),
+    st.Page("views/head_to_head.py", title="Head to head", icon=":material/compare_arrows:"),
+    st.Page("views/stats_lab.py", title="Stats lab", icon=":material/science:"),
+    st.Page("views/luck_vs_skill.py", title="Luck vs skill", icon=":material/casino:"),
+    st.Page("views/style_drivers.py", title="Style and drivers", icon=":material/scatter_plot:"),
+    st.Page("views/match_explorer.py", title="Match explorer", icon=":material/table_view:"),
+    st.Page("views/methods.py", title="Methods and caveats", icon=":material/menu_book:"),
 ]
 
 nav = st.navigation(pages)
