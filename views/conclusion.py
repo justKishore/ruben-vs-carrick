@@ -24,6 +24,7 @@ def chance_note(*comps: S.Comparison) -> str:
 
 pts, gf, ga = run("compare", "Points"), run("compare", "MU goals"), run("compare", "Opp goals")
 xg, xga, xgd = run("compare", "xG"), run("compare", "Opp xG"), run("compare", "xG difference")
+bcd = run("compare", "BC diff")
 fin, keep = run("compare", "Goals minus xG"), run("compare", "Conceded minus xG against")
 wdl = run("wdl_test")
 sched = run("schedule_difficulty").iloc[0]
@@ -37,12 +38,16 @@ ui.n_banner(pts.n_amorim, pts.n_carrick, "Whole season. Sidebar filters do not a
 
 results_up = pts.diff > 0
 chances_up = xgd.diff > 0 and ok(xgd)
+# "Moved" = at least a small effect (|d| >= 0.3); "reliable" is judged separately.
+xg_flat = max(abs(c.cohens_d) for c in (xg, xga, xgd)) < 0.3
+bc_up = bcd.diff > 0 and abs(bcd.cohens_d) >= 0.3
 with st.container(border=True):
     st.markdown("### " + (
         "Better results under Carrick, matched by better chances."
         if results_up and chances_up else
         ("Better results under Carrick" + (", but not proven" if not ok(pts) else "")
-         + ", and not matched by better chances.")
+         + (". By xG the chances barely moved; by big chances they improved."
+            if xg_flat and bc_up else ", and not matched by better chances."))
         if results_up else
         "No better results under Carrick."))
 
@@ -62,10 +67,13 @@ finding("Results",
 finding("Chances",
         f"xG {xg.mean_amorim:.2f} to {xg.mean_carrick:.2f} per game, xG against "
         f"{xga.mean_amorim:.2f} to {xga.mean_carrick:.2f}. The balance of chances (xG "
-        f"difference) went from {xgd.mean_amorim:+.2f} to {xgd.mean_carrick:+.2f}.",
-        chance_note(xg, xga, xgd)
-        + (" The chances created and allowed changed only a little."
-           if max(abs(c.cohens_d) for c in (xg, xga, xgd)) < 0.3 else ""))
+        f"difference) went from {xgd.mean_amorim:+.2f} to {xgd.mean_carrick:+.2f}. The big "
+        f"chance difference (Man Utd's big chances minus the opponent's) went from "
+        f"{bcd.mean_amorim:+.2f} to {bcd.mean_carrick:+.2f} per game.",
+        chance_note(xg, xga, xgd, bcd)
+        + (" By xG the chances changed only a little, but Man Utd got more of the clearest "
+           "chances relative to opponents." if xg_flat and bc_up else
+           " The chances created and allowed changed only a little." if xg_flat else ""))
 
 finding("Finishing and goalkeeping",
         f"Goals minus xG went from {fin.mean_amorim:+.2f} to {fin.mean_carrick:+.2f} per game, "
@@ -83,9 +91,11 @@ finding("Playing style",
         if len(style_clear) <= len(style) // 4 else
         "Several style stats differ between the two spells.")
 
+harder = CARRICK if sched.mean_carrick < sched.mean_amorim else AMORIM
 finding("Schedule",
         f"Average opponent league position {sched.mean_amorim:.1f} under Amorim and "
-        f"{sched.mean_carrick:.1f} under Carrick.",
+        f"{sched.mean_carrick:.1f} under Carrick, so {harder.split()[-1]} faced slightly "
+        "stronger opponents.",
         "Broadly comparable; the gap could be chance."
         if not S.is_reliable(sched.p_permutation, sched.diff_ci_low, sched.diff_ci_high) else
         "The schedules differed in strength, which matters when comparing results.")
@@ -94,10 +104,14 @@ st.divider()
 st.subheader("Did Man Utd play better, or just get the results?")
 played_better = chances_up or (xgd.diff > 0 and abs(xgd.cohens_d) >= 0.3)
 st.markdown(ui.clean(
-    ("**Mostly the results.** Points and wins went up, but the chances Man Utd created and "
-     "allowed stayed about the same. The better scorelines came from finishing and "
-     "goalkeeping running in Carrick's favour, not from a clear change in how matches were "
-     "played." if results_up and not played_better else
+    ("**Mostly the results, with some sign of better chances.** Points and wins went up. By "
+     "xG, the chances Man Utd created and allowed stayed about the same, but Man Utd did get "
+     "more of the clearest chances (big chances) relative to opponents, and finishing and "
+     "goalkeeping ran in Carrick's favour. None of these gaps stands out from normal "
+     "game-to-game variation." if results_up and not played_better and bc_up else
+     "**Mostly the results.** Points and wins went up, but the chances Man Utd created and "
+     "allowed stayed about the same. Finishing and goalkeeping ran in Carrick's favour "
+     "instead, rather than a clear change in the chances." if results_up and not played_better else
      "**Both.** Results improved and so did the balance of chances, so the better scorelines "
      "came with better play on these measures." if results_up else
      "**Neither.** Results did not improve under Carrick.")
@@ -107,8 +121,8 @@ st.markdown(ui.clean(
 st.subheader("The open question")
 st.markdown(ui.clean(
     "Did the Man Utd board make the change needed to save the season, or did it just start "
-    "another cycle of managerial changes? If results held up while the underlying chances "
-    "stayed flat, which would you expect next season?"))
+    "another cycle of managerial changes? If the results ran ahead of the chances, which would "
+    "you expect next season?"))
 st.info(ui.clean(
     "Spotted something in the data I missed, or read it differently? I would really "
     "appreciate hearing your findings."), icon=":material/forum:")

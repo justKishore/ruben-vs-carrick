@@ -79,7 +79,10 @@ left, right = st.columns([1, 2])
 with left:
     ui.table(S.era_means(sel, f.metric).assign(
         Manager=lambda d: d["Manager"].map(C.short)), "trend_era_means",
-        column_config={"mean": st.column_config.NumberColumn(label, format="%.3f")})
+        column_config={"mean": st.column_config.NumberColumn(label, format="%.3f"),
+                       "n": st.column_config.NumberColumn("Games"),
+                       "first_gw": st.column_config.NumberColumn("First GW"),
+                       "last_gw": st.column_config.NumberColumn("Last GW")})
 with right:
     if ui.need_both(sel_tests):
         comp = S.compare(sel_tests, f.metric)

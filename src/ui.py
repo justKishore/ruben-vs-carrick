@@ -112,6 +112,9 @@ def sidebar() -> Filters:
               help="1 = top of the table. GW1 has no pre-match table, so it is only "
                    "included when the full 1 to 20 range is selected.")
     sb.slider("Smoothing window (games)", 1, 8, 4, key="window", bind="query-params")
+    sb.toggle("Show stats detail", value=False, key="detail", bind="query-params",
+              help="Adds the technical line under each finding: p-values, effect sizes "
+                   "(Cohen's d, Cliff's delta), test names and model details.")
     sb.caption("Filters are saved in the URL, so a view can be shared by copying the link.")
     return current_filters()
 
@@ -183,11 +186,16 @@ def filter_note(f: Filters) -> str:
 
 
 def finding(text: str, detail: str = "") -> None:
-    """Findings card: the plain-English result, then optional statistical detail."""
+    """Findings card: the plain-English result, then the statistical detail when
+    'Show stats detail' is on in the sidebar (off by default, for non-experts)."""
     with st.container(border=True):
         st.markdown(f":material/lightbulb: **What we found.** {clean(text)}")
-        if detail:
+        if detail and show_detail():
             st.caption(clean(detail))
+
+
+def show_detail() -> bool:
+    return bool(st.session_state.get("detail", False))
 
 
 def chart(

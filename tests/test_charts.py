@@ -134,3 +134,9 @@ def test_scatter_jitter_keeps_true_values_in_hover(df: pd.DataFrame) -> None:
     true_y = [float(v) for v in tr.customdata[:, 3]]
     assert all(float(v).is_integer() for v in true_y)
     assert max(abs(a - b) for a, b in zip(tr.y, true_y)) <= C.JITTER
+
+
+def test_radar_labels_wrap_long_names() -> None:
+    assert C._wrap("Touches in opp box") == "Touches in<br>opp box"
+    assert C._wrap("xG") == "xG"
+    assert "<br>" in C._wrap("Passes in final third %")

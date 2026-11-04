@@ -256,12 +256,22 @@ def cusum_chart(cus: pd.DataFrame, label: str) -> go.Figure:
 # ---------------------------------------------------------------------------
 # Head to head
 # ---------------------------------------------------------------------------
+def _wrap(label: str, width: int = 14) -> str:
+    """Break a long axis label onto two lines at the space nearest the middle."""
+    if len(label) <= width or " " not in label:
+        return label
+    spaces = [i for i, ch in enumerate(label) if ch == " "]
+    cut = min(spaces, key=lambda i: abs(i - len(label) / 2))
+    return label[:cut] + "<br>" + label[cut + 1:]
+
+
 def radar_chart(rz: pd.DataFrame, height: int = 460) -> go.Figure:
-    """Z-scored manager means; further out is better for directional stats."""
+    """Z-scored manager means; further out is better for directional stats.
+    Long spoke labels wrap onto two lines so they are not clipped."""
     fig = go.Figure()
     for mgr in _managers_in(rz):
         g = rz[rz["Manager"] == mgr]
-        theta = list(g["label"]) + [g["label"].iloc[0]]
+        theta = [_wrap(x) for x in g["label"]] + [_wrap(g["label"].iloc[0])]
         r = list(g["z"]) + [g["z"].iloc[0]]
         fig.add_trace(go.Scatterpolar(
             r=r, theta=theta, name=short(mgr), fill="toself",
@@ -273,11 +283,11 @@ def radar_chart(rz: pd.DataFrame, height: int = 460) -> go.Figure:
     fig.update_layout(polar=dict(
         bgcolor=SURFACE,
         radialaxis=dict(range=[-max(1.0, zmax) * 1.1, max(1.0, zmax) * 1.1],
-                        gridcolor=GRID, linecolor=AXIS, tickfont=dict(color=MUTED, size=10)),
+                        gridcolor=GRID, linecolor=AXIS, showticklabels=False),
         angularaxis=dict(gridcolor=GRID, linecolor=AXIS, tickfont=dict(color=TEXT, size=11)),
     ))
     base_layout(fig, height=height)
-    fig.update_layout(margin=dict(l=80, r=80, t=30, b=50),
+    fig.update_layout(margin=dict(l=100, r=100, t=40, b=50),
                       legend=dict(orientation="h", x=0.5, xanchor="center", y=-0.06, yanchor="top"))
     return fig
 
@@ -319,7 +329,7 @@ def forest_plot(fd: pd.DataFrame) -> go.Figure:
                            showarrow=False, xanchor=anchor, yanchor="bottom",
                            font=dict(color=COLORS[mgr], size=12))
     base_layout(fig, height=max(320, 26 * len(fd) + 110), legend=False,
-                x_title="Cohen's d, signed so right is better for Man Utd under Carrick")
+                x_title="Size of change (gap compared with normal game-to-game swings). Right = better under Carrick")
     fig.update_yaxes(showgrid=False, automargin=True)
     fig.update_layout(margin=dict(l=24, r=24, t=40, b=56))
     return fig
@@ -463,7 +473,7 @@ def results_process_chart(fd: pd.DataFrame) -> go.Figure:
                            showarrow=False, xanchor=anchor, yanchor="bottom",
                            font=dict(color=COLORS[mgr], size=12))
     base_layout(fig, height=360, legend=False,
-                x_title="Cohen's d, signed so right is better for Man Utd under Carrick")
+                x_title="Size of change (gap compared with normal game-to-game swings). Right = better under Carrick")
     fig.update_yaxes(showgrid=False, automargin=True, tickfont=dict(color=TEXT))
     fig.update_layout(margin=dict(l=24, r=24, t=40, b=56))
     return fig
@@ -519,7 +529,7 @@ def style_shift_chart(table: pd.DataFrame) -> go.Figure:
                            showarrow=False, xanchor=anchor, yanchor="bottom",
                            font=dict(color=MUTED, size=12))
     base_layout(fig, height=max(360, 24 * len(t) + 120), legend=False,
-                x_title="Change in Carrick's games, in standard deviations (Cohen's d). Filled dot: reliable or possible change")
+                x_title="Size of change (gap compared with normal game-to-game swings). Right = more in Carrick's games")
     fig.update_yaxes(showgrid=False, automargin=True, tickfont=dict(color=TEXT))
     fig.update_layout(margin=dict(l=24, r=24, t=40, b=56))
     return fig
@@ -742,8 +752,8 @@ def pca_chart(scores: pd.DataFrame, explained: np.ndarray) -> go.Figure:
                                  marker=dict(size=11, color=NEUTRAL,
                                              symbol=CLUSTER_SYMBOLS[c % len(CLUSTER_SYMBOLS)])))
     return base_layout(fig, height=420,
-                       x_title=f"PC1 ({explained[0]:.0%} of variance)",
-                       y_title=f"PC2 ({explained[1]:.0%} of variance)")
+                       x_title=f"Style score 1 (captures {explained[0]:.0%} of the variation)",
+                       y_title=f"Style score 2 ({explained[1]:.0%})")
 
 
 def interval_chart(t: pd.DataFrame, value: str, low: str, high: str, x_title: str) -> go.Figure:

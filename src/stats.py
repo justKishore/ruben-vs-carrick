@@ -1522,12 +1522,13 @@ def improvement_summary(table: pd.DataFrame, wdl: WDLTest) -> tuple[str, str]:
         f"{fmt_p(wdl.p_fisher)}). "
         f"The underlying chance balance (xG difference) went from {xgd.mean_amorim:+.2f} to "
         f"{xgd.mean_carrick:+.2f} per game, "
-        + ("so results improved more than the chances did. That pattern fits finishing, "
-           "goalkeeping or luck better than a clear change in the chances, though this data "
-           "cannot say which. "
+        + ("so results improved more than xG did. That pattern fits finishing, goalkeeping "
+           "or luck better than a clear change in xG, though this data cannot say which. "
            if pts["diff"] > 0 and abs(xgd.cohens_d) < 0.2 else
            "in line with the change in results. " if np.sign(xgd["diff"]) == np.sign(pts["diff"])
            else "moving the opposite way to results. ")
+        + (f"The big chance difference went from {t.at['BC diff', 'mean_amorim']:+.2f} to "
+           f"{t.at['BC diff', 'mean_carrick']:+.2f} per game. " if "BC diff" in t.index else "")
         + f"{better_dirs} of {n} measures moved in Carrick's favour. With 20 and 17 games, only "
           "very large changes can be confirmed, and the change of manager also coincides with "
           "a different part of the season."
