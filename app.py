@@ -18,6 +18,7 @@ pages = [
     st.Page("views/luck_vs_skill.py", title="Luck vs skill", icon=":material/casino:"),
     st.Page("views/style_drivers.py", title="Style and drivers", icon=":material/scatter_plot:"),
     st.Page("views/match_explorer.py", title="Match explorer", icon=":material/table_view:"),
+    st.Page("views/conclusion.py", title="Conclusion", icon=":material/flag:"),
     st.Page("views/methods.py", title="Methods and caveats", icon=":material/menu_book:"),
 ]
 
