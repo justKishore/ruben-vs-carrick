@@ -7,7 +7,7 @@ what should I be careful about. Keep the language simple, no em dashes.
 EXPLAIN: dict[str, str] = {
     # --- Overview -------------------------------------------------------------
     "kpis": """
-**What it shows:** six headline numbers per game for Carrick, each with the change from Amorim.
+**What it shows:** six headline numbers per game, with Amorim and Carrick side by side.
 
 - **PPG**: points per game (3 for a win, 1 for a draw).
 - **GF / GA**: goals for and goals against per game.
@@ -15,11 +15,28 @@ EXPLAIN: dict[str, str] = {
   shot like it is scored, so it measures the quality of chances, not luck in finishing.
 - **Win %**: share of games won.
 
-**How to read it:** a green change means better for Man Utd, red means worse. For GA
-and xGA, lower is better, so a fall shows green.
+**How to read it:** "Change" is Carrick minus Amorim. "Better under" names the manager
+whose number is better for Man Utd, in that manager's colour. For GA and xGA, lower is
+better. The 95% range is the plausible size of the true gap: if it includes zero, no
+difference is still plausible.
 
-**Careful:** the colour only shows direction. It does not mean the gap is real rather
-than chance. The Stats lab checks that.
+**Careful:** "better under" only shows direction. It does not mean the gap is real rather
+than chance. The range and the Stats lab check that.
+""",
+    "results_process": """
+**What it shows:** the seven key measures in two groups. **Results** are what ended up on
+the scoreboard (points, goals scored, goals conceded). **Process** is the chances behind
+them (xG, xG against, xG difference, big chance difference).
+
+**How to read it:** every gap is on one common scale (Cohen's d: the gap divided by the
+usual game-to-game spread). Right of the line is better for Man Utd under Carrick, left
+better under Amorim; for goals conceded and xG against the scale is flipped so this
+always holds. Whiskers are the 95% range. **Filled** dots changed by more than chance
+would usually produce; **hollow** dots could be chance.
+
+**Why two groups:** if results moved a lot but the chances did not, the change in results
+came with little change in the chances created and allowed. The chart shows the pattern;
+it cannot say what caused it.
 """,
     "form": """
 **What it shows:** every league game in order. Each square is one match: **green = win,
@@ -130,8 +147,10 @@ extreme ones.
     "venue_split": """
 **What it shows:** the selected stat for each manager, split into home and away games.
 
-**How to read it:** each manager has a line joining their home average (left) to their
-away average (right). A steeper line means a bigger home and away gap. Compare the dots
+**How to read it:** each manager has a dotted line joining their home average (left) to
+their away average (right). A steeper line means a bigger home and away gap. The whiskers
+are 95% ranges and the n beside each dot is the number of games; overlapping whiskers mean
+the gap could be chance. Compare the dots
 at the same venue to compare the managers. The table underneath repeats this for every
 area stat. The sidebar venue filter is ignored here, since both venues are shown.
 
@@ -214,11 +233,13 @@ recent form.
 Opponent form is the points per game the opponent took from its previous league games, up
 to the last five (fewer early in the season).
 
-**How to read it:** the sentence gives the gap that remains once those are accounted
-for, with a 95% range. If the range includes zero (or 1 for a rate ratio), the gap is
-not reliable.
+**How to read it:** the chart has two rows. **Raw gap** is the simple difference between
+the managers; **After adjustment** is the gap left once those things are allowed for. The
+whisker is the 95% range and the dotted line is "no difference" (0, or 1 for a rate
+ratio). If a whisker crosses the dotted line, that gap is not reliable. Comparing the two
+rows shows how much the schedule changes the picture.
 
-**The table:** one row per item in the model. *carrick* is the manager gap (the number
+**Every term in the model** (the expander): one row per item in the model. *carrick* is the manager gap (the number
 that matters here). *home* is the extra amount in home games, *opp_position* the change
 for each place lower the opponent sat in the table, *opp_form_ppg* the change for each
 extra point per game of opponent form, and *const* is the starting value the others add
@@ -256,9 +277,11 @@ range.
 **What it shows:** goals scored and conceded per game compared using models built for
 counts, because goals are small whole numbers and do not follow a bell curve.
 
-**How to read it:** the **rate ratio** is Carrick's rate divided by Amorim's. 0.7 for
-goals conceded means 30% fewer conceded per game. If its range includes 1, there is no
-reliable difference.
+**How to read it:** the chart shows the **rate ratio**, Carrick's goals per game divided
+by Amorim's, for goals scored and conceded, raw and adjusted. 0.7 for goals conceded means
+30% fewer conceded per game. The dotted line at 1 is "no difference"; if a whisker crosses
+it, that change is not reliable. The chart uses NegBin; the expander has the full table,
+including Poisson.
 
 - **Poisson** assumes goals arrive at a steady random rate.
 - **NegBin** allows more variation between games. If the two agree, either is fine.
@@ -274,7 +297,10 @@ reliable difference.
 **What it shows:** goals scored against xG for each game.
 
 **How to read it:** the grey diagonal is "scored exactly what the chances were worth".
-Dots above it are games where Man Utd finished better than expected; below, worse.
+Dots above it are games where Man Utd scored more than the xG; below, fewer. The large
+diamonds are each manager's average, with 95% ranges in both directions. Goals are whole
+numbers, so dots are nudged up or down slightly to stop games hiding behind each other;
+hover shows the true values.
 
 **Why it matters:** goals depend on both the chances created (xG) and how they were
 finished. This chart separates the two, so you can see whether a change in goals came
@@ -285,6 +311,8 @@ with a change in chances or not.
 
 **How to read it:** dots below the diagonal are games where Man Utd conceded fewer than
 the chances suggested (good goalkeeping or wasteful opponents). Above it, the opposite.
+The large diamonds are each manager's average with 95% ranges. Dots are nudged up or down
+slightly so tied games stay visible; hover shows the true values.
 
 **The question:** did goals conceded fall under Carrick because Man Utd allowed fewer
 good chances, or because more of the chances allowed went unscored? The note under the
@@ -319,7 +347,9 @@ points match the goals.
 in the goal the shot went. It shows how good the shots that reached the keeper were.
 
 **How to read it:** above the diagonal, shots beat the goalkeeper more often than
-expected; below, the keeper did better than expected.
+expected; below, the keeper did better than expected. The large diamonds are each
+manager's average with 95% ranges. Dots are nudged up or down slightly so tied games stay
+visible; hover shows the true values.
 """,
     "bc_missed": """
 **What it shows:** big chances missed per game (bars are the average, dots are single
@@ -361,7 +391,8 @@ chances (across) and goals conceded (up). The bar chart shows how many big chanc
 opponents missed per game (bar = average, dots = single games).
 
 **How to read it:** dots below the diagonal are games where opponents scored fewer goals
-than they had big chances. Fewer big chances conceded is about what the defence allowed.
+than they had big chances. The large diamonds are each manager's average with 95% ranges.
+Both axes are whole numbers, so dots are nudged slightly so tied games stay visible. Fewer big chances conceded is about what the defence allowed.
 How many of those chances opponents missed is largely down to the opponent's finishing
 and the goalkeeper, so the two charts separate those parts.
 """,

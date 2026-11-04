@@ -44,7 +44,8 @@ def over_under(value: float, unit: str = "goals") -> str:
 # --- Goals vs xG -----------------------------------------------------------------------
 ui.section("Goals vs xG", "goals_vs_xg")
 c = ui.run_f(f, "compare", "Goals minus xG")
-ui.chart(C.xy_scatter(df, "xG", "MU goals", "xG", "Goals scored"), "goals_vs_xg",
+ui.chart(C.xy_scatter(df, "xG", "MU goals", "xG", "Goals scored",
+                      means=ui.run_f(f, "xy_means", "xG", "MU goals")), "goals_vs_xg",
          f"Carrick's side scored {over_under(c.mean_carrick)} what its chances were worth; "
          f"Amorim's scored {over_under(c.mean_amorim)}. "
          + ("Carrick's side finished further above its chances. " if c.mean_carrick > c.mean_amorim
@@ -70,7 +71,8 @@ if ga.diff < 0:
 else:
     conceded_text = (f"Goals conceded did not fall under Carrick ({ga.mean_carrick:.2f} vs "
                      f"{ga.mean_amorim:.2f} per game).")
-ui.chart(C.xy_scatter(df, "Opp xG", "Opp goals", "xG against", "Goals conceded"),
+ui.chart(C.xy_scatter(df, "Opp xG", "Opp goals", "xG against", "Goals conceded",
+                      means=ui.run_f(f, "xy_means", "Opp xG", "Opp goals")),
          "conceded_vs_xga", conceded_text,
          f"xG against difference {xga.diff:+.2f} (95% CI {ui.fmt_ci(xga.diff_ci_low, xga.diff_ci_high)}, "
          f"p={S.fmt_p(xga.p_permutation)}). Conceded minus xG against: {gap(over)}.")
@@ -116,7 +118,8 @@ ui.table(py.reset_index(), "pythagorean_table",
 ui.section("Finishing: xG on target vs goals", "xgot")
 c = ui.run_f(f, "compare", "Goals minus xGOT")
 ui.chart(C.xy_scatter(df, "xG on target (xGOT)", "MU goals", "xG on target (xGOT)",
-                      "Goals scored"), "goals_vs_xgot",
+                      "Goals scored",
+                      means=ui.run_f(f, "xy_means", "xG on target (xGOT)", "MU goals")), "goals_vs_xgot",
          f"Once shots were on target, Carrick's side scored {over_under(c.mean_carrick)} what the "
          f"shots were worth, Amorim's {over_under(c.mean_amorim)}. "
          + ("Carrick's side scored more than the quality of its shots on target suggested. "
@@ -217,7 +220,8 @@ opp_bc = ui.run_f(f, "compare", "Opp Big chances")
 opp_miss = ui.run_f(f, "compare", "Opp Big chances missed")
 opp_conv = ui.run_f(f, "bc_conversion", "opp")
 ui.chart(C.xy_scatter(df, "Opp Big chances", "Opp goals", "Opponent big chances",
-                      "Goals conceded"), "defensive_luck",
+                      "Goals conceded",
+                      means=ui.run_f(f, "xy_means", "Opp Big chances", "Opp goals")), "defensive_luck",
          f"Opponents created {opp_bc.mean_carrick:.2f} big chances per game against Carrick's side "
          f"vs {opp_bc.mean_amorim:.2f} against Amorim's, and scored {opp_conv.conversion_carrick:.0%} "
          f"of them vs {opp_conv.conversion_amorim:.0%}. "

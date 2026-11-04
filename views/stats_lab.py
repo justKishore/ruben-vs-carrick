@@ -184,23 +184,40 @@ if np.isfinite(model.estimate):
     null = 0.0 if family == "ols" else 1.0
     holds = (np.isfinite(model.p_value) and model.p_value < S.ALPHA
              and (model.ci_low > null or model.ci_high < null))
-    ui.finding(
+    if family == "ols":
+        raw = {"estimate": comp.diff, "ci_low": comp.diff_ci_low, "ci_high": comp.diff_ci_high,
+               "n_amorim": comp.n_amorim, "n_carrick": comp.n_carrick}
+        x_title = f"Carrick minus Amorim, {label} per game (dotted line: no difference)"
+    else:
+        r0 = ui.run_f(f, "count_model", f.metric, family, False)
+        raw = {"estimate": r0.estimate, "ci_low": r0.ci_low, "ci_high": r0.ci_high,
+               "n_amorim": r0.n_amorim, "n_carrick": r0.n_carrick}
+        x_title = "Rate ratio, Carrick / Amorim (dotted line: no difference)"
+    est_rows = pd.DataFrame([
+        {"label": "Raw gap", **raw},
+        {"label": "After adjustment", "estimate": model.estimate, "ci_low": model.ci_low,
+         "ci_high": model.ci_high, "n_amorim": model.n_amorim, "n_carrick": model.n_carrick},
+    ])
+    ui.chart(
+        C.estimate_chart(est_rows, null, x_title, log=family != "ols"), "adjusted_estimate",
         ("Even after allowing for home or away, opponent strength and opponent form, the gap "
          f"in {label} between the managers remains and is unlikely to be chance."
          if holds else
          "Once home or away, opponent strength and opponent form are taken into account, the "
-         f"gap in {label} between the managers is not reliably different from zero."),
-        S.describe_model(model, label))
+         f"gap in {label} between the managers is not reliable: its range includes no difference."),
+        S.describe_model(model, label)
+        + " Filled dot: the 95% range excludes no difference; hollow: it includes it.")
 else:
     st.info(S.describe_model(model, label))
 if not model.params.empty:
-    ui.table(model.params.reset_index(names="term"), "adjusted_params",
-             column_config={c: st.column_config.NumberColumn(format="%.3f")
-                            for c in ("coef", "ci_low", "ci_high", "p")})
-    if family != "ols":
-        st.caption("Coefficients are on the log scale; exp(coef) is the rate ratio. "
-                   + (f"Poisson dispersion {model.dispersion:.2f} (above 1.5 suggests NegBin)."
-                      if family == "poisson" else f"NegBin alpha {model.alpha:.3f}."))
+    with st.expander("Every term in the model"):
+        ui.table(model.params.reset_index(names="term"), "adjusted_params",
+                 column_config={c: st.column_config.NumberColumn(format="%.3f")
+                                for c in ("coef", "ci_low", "ci_high", "p")})
+        if family != "ols":
+            st.caption("Coefficients are on the log scale; exp(coef) is the rate ratio. "
+                       + (f"Poisson dispersion {model.dispersion:.2f} (above 1.5 suggests NegBin)."
+                          if family == "poisson" else f"NegBin alpha {model.alpha:.3f}."))
 
 # --- Autocorrelation -------------------------------------------------------------------
 ui.section("Autocorrelation", "autocorrelation")
@@ -252,9 +269,13 @@ for metric, name in (("MU goals", "Goals scored"), ("Opp goals", "Goals conceded
                          "Bootstrap CI high": r.boot_ci_high, "n A": r.n_amorim, "n C": r.n_carrick,
                          "Poisson dispersion": r.dispersion, "NegBin alpha": r.alpha})
 goals = pd.DataFrame(rows)
-ui.table(goals, "goals_models", column_config={
-    c: st.column_config.NumberColumn(format="%.3f") for c in goals.columns
-    if goals[c].dtype.kind == "f"})
+nb = goals[goals["Model"] == "negbin"]
+goal_rows = pd.DataFrame({
+    "label": nb["Outcome"] + np.where(nb["Adjusted"], ", adjusted", ", raw"),
+    "estimate": nb["Rate ratio (C / A)"], "ci_low": nb["CI low"], "ci_high": nb["CI high"],
+    "n_amorim": nb["n A"], "n_carrick": nb["n C"]})
+
+
 def _nb(outcome: str) -> pd.Series:
     sel = goals[(goals["Outcome"] == outcome) & (goals["Model"] == "negbin") & ~goals["Adjusted"]]
     return sel.iloc[0]
@@ -265,15 +286,21 @@ def _pct(rr: float) -> str:
 
 
 gs, gc = _nb("Goals scored"), _nb("Goals conceded")
-spans = [n for n, r in (("scored", gs), ("conceded", gc)) if r["CI low"] <= 1 <= r["CI high"]]
-ui.finding(
-    f"Under Carrick, Man Utd scored {_pct(gs['Rate ratio (C / A)'])} goals per game and conceded "
-    f"{_pct(gc['Rate ratio (C / A)'])}. "
-    + ("Neither change is statistically reliable: both plausible ranges include no change."
-       if len(spans) == 2 else
-       "Only one of the changes is statistically reliable." if len(spans) == 1 else
-       "Both changes are larger than chance would usually produce."),
-    f"NegBin rate ratios (Carrick / Amorim): scored {gs['Rate ratio (C / A)']:.2f} (95% CI "
-    f"{gs['CI low']:.2f} to {gs['CI high']:.2f}, p={S.fmt_p(gs['p'])}), conceded "
-    f"{gc['Rate ratio (C / A)']:.2f} (95% CI {gc['CI low']:.2f} to {gc['CI high']:.2f}, "
-    f"p={S.fmt_p(gc['p'])}). Adjusted rows drop GW1.")
+all_cross = bool(((goal_rows["ci_low"] <= 1) & (goal_rows["ci_high"] >= 1)).all())
+ui.chart(C.estimate_chart(goal_rows, 1.0, "Rate ratio, Carrick / Amorim (dotted line: no "
+                                        "difference)", log=True),
+         "goals_rate_ratios",
+         f"Under Carrick, Man Utd scored {_pct(gs['Rate ratio (C / A)'])} goals per game and "
+         f"conceded {_pct(gc['Rate ratio (C / A)'])} (raw). "
+         + ("Every range, raw and adjusted, crosses the no-difference line, so none of these "
+            "changes is reliable." if all_cross else
+            "At least one range sits clear of the no-difference line."),
+         f"NegBin rate ratios (Carrick / Amorim), raw: scored {gs['Rate ratio (C / A)']:.2f} "
+         f"(95% CI {gs['CI low']:.2f} to {gs['CI high']:.2f}, p={S.fmt_p(gs['p'])}), conceded "
+         f"{gc['Rate ratio (C / A)']:.2f} (95% CI {gc['CI low']:.2f} to {gc['CI high']:.2f}, "
+         f"p={S.fmt_p(gc['p'])}). Adjusted rows allow for venue, opponent position and opponent "
+         "form, and drop GW1. Poisson rows are in the full table.")
+with st.expander("Full table (Poisson and NegBin)"):
+    ui.table(goals, "goals_models", column_config={
+        c: st.column_config.NumberColumn(format="%.3f") for c in goals.columns
+        if goals[c].dtype.kind == "f"})

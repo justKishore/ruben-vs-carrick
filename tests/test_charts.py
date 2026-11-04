@@ -111,3 +111,26 @@ def test_style_shift_chart_has_no_manager_colours(df: pd.DataFrame) -> None:
     table["area"] = "Attack"
     line = C.style_shift_chart(table).data[0].marker.line.color
     assert line not in (C.COLORS[AMORIM], C.COLORS[CARRICK])
+
+
+def test_new_comparison_charts(df: pd.DataFrame) -> None:
+    t = df[df["Manager"].isin(S.TESTED)]
+    figs = [
+        C.results_process_chart(S.results_vs_process(t, n_resamples=200)),
+        C.estimate_chart(pd.DataFrame({"label": ["Raw", "Adjusted"], "estimate": [0.9, 1.1],
+                                       "ci_low": [0.6, 0.7], "ci_high": [1.3, 1.6]}),
+                         1.0, "Rate ratio", log=True),
+        C.xy_scatter(df, "xG", "MU goals", "xG", "Goals",
+                     means=S.xy_means(df, "xG", "MU goals", n_boot=200)),
+        C.venue_split_chart(S.venue_split(df, ["xG"], n_boot=200), "xG", "continuous"),
+    ]
+    for f in figs:
+        f.to_dict()
+
+
+def test_scatter_jitter_keeps_true_values_in_hover(df: pd.DataFrame) -> None:
+    fig = C.xy_scatter(df, "xG", "MU goals", "xG", "Goals")
+    tr = [t for t in fig.data if t.name and t.name.startswith("Carrick")][0]
+    true_y = [float(v) for v in tr.customdata[:, 3]]
+    assert all(float(v).is_integer() for v in true_y)
+    assert max(abs(a - b) for a, b in zip(tr.y, true_y)) <= C.JITTER

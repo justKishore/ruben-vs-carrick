@@ -29,35 +29,79 @@ if not ui.need_both(tdf):
 # --- KPI cards -----------------------------------------------------------------
 ui.section("Per-game KPIs", "kpis")
 kpis = S.kpi_summary(tdf)
-cols = st.columns(len(S.KPI_SPEC))
-for col, (name, (_, direction)) in zip(cols, S.KPI_SPEC.items()):
-    with col.container(border=True):
-        a, c = kpis.at[AMORIM, name], kpis.at[CARRICK, name]
-        kind = "pct" if name == "Win %" else "continuous"
-        st.metric(
-            f"{name}, Carrick",
-            S.fmt_value(c, kind),
-            delta=f"{S.fmt_value(c - a, kind, signed=True)} vs Amorim",
-            delta_color="normal" if direction > 0 else "inverse",
-        )
-        st.caption(f"Amorim {S.fmt_value(a, kind)}. n={int(kpis.at[CARRICK, 'n'])} vs "
-                   f"{int(kpis.at[AMORIM, 'n'])}")
-
 kpi_comps = {k: ui.run_f(f, "compare", col) for k, (col, _) in S.KPI_SPEC.items() if col != "_win"}
+wdl = ui.run_f(f, "wdl_test")
+
+
+def kpi_card(name: str, direction: int) -> str:
+    """Both managers at equal weight, the change with its 95% range, and which
+    manager the direction favours (in that manager's colour)."""
+    kind = "pct" if name == "Win %" else "continuous"
+    a, c = kpis.at[AMORIM, name], kpis.at[CARRICK, name]
+    if name == "Win %":
+        lo, hi = wdl.win_rate_ci_low, wdl.win_rate_ci_high
+    else:
+        lo, hi = kpi_comps[name].diff_ci_low, kpi_comps[name].diff_ci_high
+    diff = c - a
+    fav = None if diff == 0 else (CARRICK if diff * direction > 0 else AMORIM)
+    row = ("<div style='display:flex;justify-content:space-between;align-items:baseline'>"
+           "<span style='color:{col}'>&#9679;</span><span style='flex:1;margin-left:6px;"
+           "color:#E6E8EB;font-size:0.85rem'>{who}</span>"
+           "<span style='font-size:1.35rem;font-weight:600;color:#E6E8EB'>{val}</span></div>")
+    rows = "".join(row.format(col=C.COLORS[m], who=C.short(m), val=S.fmt_value(v, kind))
+                   for m, v in ((AMORIM, a), (CARRICK, c)))
+    fav_html = (f"<span style='color:{C.COLORS[fav]}'>better under {C.short(fav)}</span>"
+                if fav else "no change")
+    return (f"<div style='font-size:0.9rem;color:#9AA0A6;margin-bottom:4px'>{name}</div>{rows}"
+            f"<div style='margin-top:6px;font-size:0.8rem;color:#E6E8EB'>"
+            f"Change {S.fmt_value(diff, kind, signed=True)}, {fav_html}</div>"
+            f"<div style='font-size:0.75rem;color:#9AA0A6'>95% range "
+            f"{S.fmt_value(lo, kind, True)} to {S.fmt_value(hi, kind, True)}</div>")
+
+
+for row_items in (list(S.KPI_SPEC.items())[:3], list(S.KPI_SPEC.items())[3:]):
+    for col, (name, (_, direction)) in zip(st.columns(3), row_items):
+        with col.container(border=True):
+            st.markdown(kpi_card(name, direction), unsafe_allow_html=True)
+
 better = [k for k, c in kpi_comps.items() if c.better == CARRICK]
 worse = [k for k, c in kpi_comps.items() if c.better == AMORIM]
 n_reliable = sum(S.is_reliable(c.p_permutation, c.diff_ci_low, c.diff_ci_high)
                  for c in kpi_comps.values())
 ui.finding(
-    (f"Under Carrick, {', '.join(better) or 'none of the KPIs'} improved"
-     + (f", while {', '.join(worse)} got worse" if worse else "")
-     + (". Results improved more than chance creation did. "
-        if "PPG" in better and "xG" in worse else ". ")
+    (f"Under Carrick, {', '.join(better) or 'none of the KPIs'} moved in Man Utd's favour"
+     + (f", while {', '.join(worse)} moved the other way" if worse else "")
+     + ". "
      + ("None of these gaps is large enough to rule out chance with 20 and 17 games."
         if n_reliable == 0 else
         f"{n_reliable} of {len(kpi_comps)} gaps are larger than chance would usually produce.")),
-    "Green deltas are better for Man Utd (for GA and xGA, lower is better). Colour shows "
-    "direction only; the Stats lab tests each gap.",
+    f"n={int(kpis.at[AMORIM, 'n'])} Amorim, {int(kpis.at[CARRICK, 'n'])} Carrick games. "
+    "For GA and xGA lower is better. 'Better under' shows direction only; a 95% range that "
+    "includes zero means no difference is still plausible.",
+)
+
+# --- Results vs process ----------------------------------------------------------
+ui.section("Results vs process", "results_process")
+rvp = ui.run_f(f, "results_vs_process")
+res, proc = rvp[rvp["group"] == "Results"], rvp[rvp["group"] == "Process"]
+n_res_c = int((res["d_better"] > 0).sum())
+n_proc_c = int((proc["d_better"] > 0).sum())
+gap = res["d_better"].mean() - proc["d_better"].mean()
+n_rel = int((rvp["verdict"] != S.NONE).sum())
+ui.chart(
+    C.results_process_chart(rvp), "results_vs_process",
+    f"Under Carrick, {n_res_c} of {len(res)} results measures and {n_proc_c} of {len(proc)} "
+    "chance measures moved in Man Utd's favour. "
+    + ("On average, results moved further towards Carrick than the chances did. "
+       if gap > 0.2 else
+       "On average, the chances moved further towards Carrick than results did. "
+       if gap < -0.2 else
+       "Results and chances moved by similar amounts. ")
+    + ("None of the 7 gaps is reliable, so this could all be chance with 20 and 17 games."
+       if n_rel == 0 else f"{n_rel} of the 7 gaps look larger than chance on their own."),
+    f"Same 7 key measures as the Stats lab, Holm-corrected across those 7. Whiskers are 95% "
+    f"bootstrap CIs on Cohen's d. n={int(rvp['n_amorim'].iloc[0])} Amorim, "
+    f"{int(rvp['n_carrick'].iloc[0])} Carrick games.",
 )
 if FLETCHER in df["Manager"].values:
     fl = df[df["Manager"] == FLETCHER].iloc[0]
@@ -66,7 +110,6 @@ if FLETCHER in df["Manager"].values:
 
 # --- Form strip -----------------------------------------------------------------
 ui.section("Form", "form")
-wdl = ui.run_f(f, "wdl_test")
 t = wdl.table
 na, nc = int(t.loc[AMORIM].sum()), int(t.loc[CARRICK].sum())
 ui.chart(

@@ -346,19 +346,34 @@ def violin_chart(df: pd.DataFrame, metric: str, label: str, kind: str) -> go.Fig
 
 
 def venue_split_chart(vs: pd.DataFrame, label: str, kind: str) -> go.Figure:
-    """Mean per manager by venue (dot plot with n in hover)."""
+    """Mean per manager by venue with 95% bootstrap CI whiskers and n labels.
+    Managers are nudged sideways so their whiskers do not overlap."""
     fig = go.Figure()
-    for mgr in _managers_in(vs):
+    present = [m for m in (AMORIM, CARRICK) if m in set(vs["Manager"])]
+    for i, mgr in enumerate(present):
         g = vs[vs["Manager"] == mgr].set_index("venue").reindex(["Home", "Away"]).reset_index()
+        offset = (i - (len(present) - 1) / 2) * 0.12
+        has_ci = {"ci_low", "ci_high"} <= set(g.columns)
         fig.add_trace(go.Scatter(
-            x=g["venue"], y=g["mean"], mode="lines+markers", name=short(mgr),
-            line=dict(color=COLORS[mgr], width=2),
+            x=np.array([0.0, 1.0]) + offset, y=g["mean"], mode="lines+markers+text",
+            name=short(mgr), line=dict(color=COLORS[mgr], width=1.5, dash="dot"),
             marker=dict(size=12, color=COLORS[mgr], line=_ring()),
-            customdata=g["n"],
-            hovertemplate=f"%{{x}}: %{{y:{_hoverfmt(kind)}}} (n=%{{customdata}})<extra>{short(mgr)}</extra>",
+            text=[f"n={int(n)}" if pd.notna(n) else "" for n in g["n"]],
+            textposition="middle right" if i else "middle left",
+            textfont=dict(color=MUTED, size=11),
+            error_y=(dict(type="data", symmetric=False, array=g["ci_high"] - g["mean"],
+                          arrayminus=g["mean"] - g["ci_low"], color=COLORS[mgr],
+                          thickness=1.5, width=5) if has_ci else None),
+            customdata=np.stack([g["n"], g.get("ci_low", g["mean"]), g.get("ci_high", g["mean"])],
+                                axis=-1),
+            hovertemplate=(f"%{{y:{_hoverfmt(kind)}}} (95% CI %{{customdata[1]:{_hoverfmt(kind)}}} "
+                           f"to %{{customdata[2]:{_hoverfmt(kind)}}}, n=%{{customdata[0]}})"
+                           f"<extra>{short(mgr)}</extra>"),
         ))
-    base_layout(fig, height=340, y_title=label)
-    fig.update_yaxes(tickformat=_tickformat(kind))
+    base_layout(fig, height=360, y_title=f"{label} (whisker: 95% bootstrap CI)")
+    fig.update_xaxes(tickvals=[0, 1], ticktext=["Home", "Away"], range=[-0.5, 1.5], showgrid=False,
+                     zeroline=False)
+    fig.update_yaxes(tickformat=_tickformat(kind), rangemode="tozero")
     return fig
 
 
@@ -421,6 +436,64 @@ def null_histogram(null: np.ndarray, observed: float, x_title: str,
     return base_layout(fig, height=280, x_title=x_title, y_title="Shuffles", legend=False)
 
 
+def results_process_chart(fd: pd.DataFrame) -> go.Figure:
+    """Results vs process: standardised gaps (d signed so right = better under
+    Carrick) for the key measures, grouped Results / Process. Colour = manager
+    favoured, filled = clear or possible difference, hollow = could be chance.
+
+    fd needs group, label, d_better, d_better_low, d_better_high, verdict."""
+    t = fd.dropna(subset=["d_better"]).iloc[::-1]
+    colour = np.where(t["d_better"] > 0, COLORS[CARRICK], COLORS[AMORIM])
+    solid = t["verdict"] != "No reliable difference"
+    fig = go.Figure(go.Scatter(
+        x=t["d_better"], y=[t["group"], t["label"]], mode="markers", showlegend=False,
+        marker=dict(size=13, color=np.where(solid, colour, SURFACE), line=dict(color=colour, width=2)),
+        error_x=dict(type="data", symmetric=False, array=t["d_better_high"] - t["d_better"],
+                     arrayminus=t["d_better"] - t["d_better_low"], color=MUTED, thickness=1.5,
+                     width=0),
+        customdata=np.stack([t["d_better_low"], t["d_better_high"], t["verdict"],
+                             t["n_amorim"], t["n_carrick"]], axis=-1),
+        hovertemplate=("%{y}<br>d %{x:.2f} (95% CI %{customdata[0]:.2f} to %{customdata[1]:.2f})"
+                       "<br>%{customdata[2]}<br>n Amorim %{customdata[3]}, Carrick %{customdata[4]}"
+                       "<extra></extra>"),
+    ))
+    fig.add_vline(x=0, line=dict(color=AXIS, width=1))
+    for mgr, x, anchor in ((AMORIM, -0.02, "right"), (CARRICK, 0.02, "left")):
+        fig.add_annotation(x=x, y=1.0, xref="x", yref="paper", text=f"better under {short(mgr)}",
+                           showarrow=False, xanchor=anchor, yanchor="bottom",
+                           font=dict(color=COLORS[mgr], size=12))
+    base_layout(fig, height=360, legend=False,
+                x_title="Cohen's d, signed so right is better for Man Utd under Carrick")
+    fig.update_yaxes(showgrid=False, automargin=True, tickfont=dict(color=TEXT))
+    fig.update_layout(margin=dict(l=24, r=24, t=40, b=56))
+    return fig
+
+
+def estimate_chart(rows: pd.DataFrame, null: float, x_title: str, log: bool = False) -> go.Figure:
+    """Neutral dot-and-whisker chart for model estimates (one row each), with a
+    reference line at the 'no difference' value. rows: label, estimate, ci_low,
+    ci_high, and optional n_amorim, n_carrick."""
+    t = rows.dropna(subset=["estimate"]).iloc[::-1]
+    solid = ~((t["ci_low"] <= null) & (null <= t["ci_high"]))
+    n_text = (t["n_amorim"].astype(str) + " / " + t["n_carrick"].astype(str)
+              if {"n_amorim", "n_carrick"} <= set(t.columns) else pd.Series("", index=t.index))
+    fig = go.Figure(go.Scatter(
+        x=t["estimate"], y=t["label"], mode="markers", showlegend=False,
+        marker=dict(size=12, color=np.where(solid, TEXT, SURFACE), line=dict(color=TEXT, width=2)),
+        error_x=dict(type="data", symmetric=False, array=t["ci_high"] - t["estimate"],
+                     arrayminus=t["estimate"] - t["ci_low"], color=MUTED, thickness=1.5, width=0),
+        customdata=np.stack([t["ci_low"], t["ci_high"], n_text], axis=-1),
+        hovertemplate=("%{y}: %{x:.2f} (95% CI %{customdata[0]:.2f} to %{customdata[1]:.2f})"
+                       "<br>games Amorim / Carrick: %{customdata[2]}<extra></extra>"),
+    ))
+    fig.add_vline(x=null, line=dict(color=AXIS, width=1.5, dash="dot"))
+    base_layout(fig, height=max(220, 52 * len(t) + 110), x_title=x_title, legend=False)
+    fig.update_xaxes(zeroline=False, type="log" if log else None)
+    fig.update_yaxes(showgrid=False, automargin=True, tickfont=dict(color=TEXT))
+    fig.update_layout(margin=dict(l=24, r=24, t=24, b=56))
+    return fig
+
+
 def style_shift_chart(table: pd.DataFrame) -> go.Figure:
     """Standardised change per style stat, grouped by area. Dot on the right =
     more of it in Carrick's games. Filled = reliable or possible, hollow = could be chance.
@@ -470,25 +543,61 @@ def acf_chart(acf_values: np.ndarray, band: float) -> go.Figure:
 # ---------------------------------------------------------------------------
 # Luck vs skill
 # ---------------------------------------------------------------------------
+JITTER = 0.15  # spread for whole-number axes so tied games stay visible
+
+
+def _is_whole(s: pd.Series) -> bool:
+    v = s.dropna().to_numpy(dtype=float)
+    return len(v) > 0 and bool(np.all(np.isclose(v, np.round(v))))
+
+
 def xy_scatter(
-    df: pd.DataFrame, x: str, y: str, x_label: str, y_label: str, identity: bool = True
+    df: pd.DataFrame, x: str, y: str, x_label: str, y_label: str, identity: bool = True,
+    means: pd.DataFrame | None = None,
 ) -> go.Figure:
-    """Per-game scatter by manager with an optional y = x line."""
+    """Per-game scatter by manager with an optional y = x line. Whole-number axes
+    (goals, big chances) get a small fixed jitter so tied games do not hide each
+    other; hover shows the true values. `means` (from stats.xy_means) adds each
+    manager's average as a large marker with 95% CI whiskers."""
     fig = go.Figure()
     if identity:
         hi = float(np.nanmax([df[x].max(), df[y].max(), 1])) * 1.05
         fig.add_trace(go.Scatter(x=[0, hi], y=[0, hi], mode="lines", name="y = x",
                                  line=dict(color=NEUTRAL, width=1), hoverinfo="skip"))
+    rng = np.random.default_rng(0)
+    jx, jy = _is_whole(df[x]), _is_whole(df[y])
     for mgr in _managers_in(df):
         g = df[df["Manager"] == mgr].dropna(subset=[x, y])
+        xs = g[x] + (rng.uniform(-JITTER, JITTER, len(g)) if jx else 0)
+        ys = g[y] + (rng.uniform(-JITTER, JITTER, len(g)) if jy else 0)
         fig.add_trace(go.Scatter(
-            x=g[x], y=g[y], mode="markers", name=f"{short(mgr)} (n={len(g)})",
-            marker=dict(size=10, color=COLORS[mgr], opacity=0.85, line=_ring()),
-            customdata=np.stack([g["GW"], g["Opponent"]], axis=-1),
-            hovertemplate=(f"GW%{{customdata[0]}} %{{customdata[1]}}<br>{x_label} %{{x:.2f}}"
-                           f"<br>{y_label} %{{y}}<extra>{short(mgr)}</extra>"),
+            x=xs, y=ys, mode="markers", name=f"{short(mgr)} games (n={len(g)})",
+            legendgroup=mgr,
+            marker=dict(size=9, color=COLORS[mgr], opacity=0.7, line=_ring()),
+            customdata=np.stack([g["GW"], g["Opponent"], g[x], g[y]], axis=-1),
+            hovertemplate=(f"GW%{{customdata[0]}} %{{customdata[1]}}<br>{x_label} "
+                           f"%{{customdata[2]:.2f}}<br>{y_label} %{{customdata[3]}}"
+                           f"<extra>{short(mgr)}</extra>"),
         ))
-    return base_layout(fig, height=400, x_title=x_label, y_title=y_label)
+    if means is not None and not means.empty:
+        for r in means.itertuples():
+            fig.add_trace(go.Scatter(
+                x=[r.x_mean], y=[r.y_mean], mode="markers", name=f"{short(r.Manager)} average",
+                legendgroup=r.Manager,
+                marker=dict(size=16, symbol="diamond", color=COLORS[r.Manager],
+                            line=dict(color=TEXT, width=2)),
+                error_x=dict(type="data", symmetric=False, array=[r.x_high - r.x_mean],
+                             arrayminus=[r.x_mean - r.x_low], color=COLORS[r.Manager],
+                             thickness=2, width=6),
+                error_y=dict(type="data", symmetric=False, array=[r.y_high - r.y_mean],
+                             arrayminus=[r.y_mean - r.y_low], color=COLORS[r.Manager],
+                             thickness=2, width=6),
+                hovertemplate=(f"{short(r.Manager)} average (n={r.n})<br>{x_label} "
+                               f"{r.x_mean:.2f} (95% CI {r.x_low:.2f} to {r.x_high:.2f})"
+                               f"<br>{y_label} {r.y_mean:.2f} (95% CI {r.y_low:.2f} to "
+                               f"{r.y_high:.2f})<extra></extra>"),
+            ))
+    return base_layout(fig, height=420, x_title=x_label, y_title=y_label)
 
 
 def xpts_chart(cum: pd.DataFrame) -> go.Figure:

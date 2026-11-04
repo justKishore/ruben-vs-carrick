@@ -905,16 +905,42 @@ def radar_z(df: pd.DataFrame, metrics: Sequence[str]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def venue_split(df: pd.DataFrame, metrics: Sequence[str]) -> pd.DataFrame:
-    """Mean and n per manager and venue for each metric (long format)."""
+def mean_ci(values: np.ndarray, n_boot: int = N_RESAMPLES, seed: int = SEED,
+            level: float = CI_LEVEL) -> tuple[float, float]:
+    """Percentile bootstrap CI for one group's mean."""
+    v = np.asarray(values, float)
+    v = v[np.isfinite(v)]
+    if len(v) < 2:
+        return (np.nan, np.nan)
+    rng = np.random.default_rng(seed)
+    means = rng.choice(v, size=(n_boot, len(v)), replace=True).mean(axis=1)
+    tail = (1 - level) / 2 * 100
+    return (float(np.percentile(means, tail)), float(np.percentile(means, 100 - tail)))
+
+
+def venue_split(df: pd.DataFrame, metrics: Sequence[str], n_boot: int = N_RESAMPLES,
+                seed: int = SEED) -> pd.DataFrame:
+    """Mean, n and a 95% bootstrap CI per manager and venue for each metric (long format)."""
     games = df[df["Manager"].isin(TESTED)]
     rows = []
     for m in metrics:
-        g = games.dropna(subset=[m]).groupby(["Manager", "venue"])[m]
-        stats = g.agg(["mean", "size"]).rename(columns={"size": "n"}).reset_index()
-        stats.insert(0, "metric", m)
-        rows.append(stats)
-    return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
+        for (mgr, venue), g in games.dropna(subset=[m]).groupby(["Manager", "venue"]):
+            lo, hi = mean_ci(g[m].to_numpy(), n_boot, seed)
+            rows.append({"metric": m, "Manager": mgr, "venue": venue, "mean": float(g[m].mean()),
+                         "n": len(g), "ci_low": lo, "ci_high": hi})
+    return pd.DataFrame(rows)
+
+
+def xy_means(df: pd.DataFrame, x: str, y: str, n_boot: int = N_RESAMPLES,
+             seed: int = SEED) -> pd.DataFrame:
+    """Per-manager mean of x and y with 95% bootstrap CIs (games resampled)."""
+    rows = []
+    for mgr, g in df[df["Manager"].isin(TESTED)].dropna(subset=[x, y]).groupby("Manager"):
+        xl, xh = mean_ci(g[x].to_numpy(), n_boot, seed)
+        yl, yh = mean_ci(g[y].to_numpy(), n_boot, seed)
+        rows.append({"Manager": mgr, "n": len(g), "x_mean": float(g[x].mean()), "x_low": xl,
+                     "x_high": xh, "y_mean": float(g[y].mean()), "y_low": yl, "y_high": yh})
+    return pd.DataFrame(rows)
 
 
 def schedule_difficulty(df: pd.DataFrame, n_resamples: int = N_RESAMPLES,
@@ -1451,6 +1477,24 @@ def improvement_table(
                                 r.diff_ci_high) for r in table.itertuples()]
     table["improved"] = table["better"] == CARRICK
     return table
+
+
+RESULTS_PROCESS: dict[str, tuple[str, ...]] = {
+    "Results": ("Points", "MU goals", "Opp goals"),
+    "Process": ("xG", "Opp xG", "xG difference", "BC diff"),
+}
+
+
+def results_vs_process(
+    df: pd.DataFrame, n_resamples: int = N_RESAMPLES, seed: int = SEED
+) -> pd.DataFrame:
+    """The 7 key measures as forest rows (d signed so + is better under Carrick),
+    tagged Results or Process. Holm is applied across the same 7 as the Stats lab."""
+    fd = forest_data(comparison_table(df, KEY_METRICS, n_resamples, seed))
+    group_of = {m: g for g, ms in RESULTS_PROCESS.items() for m in ms}
+    fd["group"] = fd["metric"].map(group_of)
+    order = {m: i for i, m in enumerate(m for ms in RESULTS_PROCESS.values() for m in ms)}
+    return fd.sort_values("metric", key=lambda s: s.map(order)).reset_index(drop=True)
 
 
 def improvement_summary(table: pd.DataFrame, wdl: WDLTest) -> tuple[str, str]:

@@ -358,3 +358,23 @@ def test_ppg_by_bc_bucket_ci_brackets_ppg(df: pd.DataFrame) -> None:
     t = S.ppg_by_bc_bucket(df, n_boot=500).dropna(subset=["PPG"])
     assert ((t["ci_low"] <= t["PPG"] + 1e-9) & (t["PPG"] <= t["ci_high"] + 1e-9)).all()
     assert ((t["ci_low"] >= 0) & (t["ci_high"] <= 3)).all()
+
+
+def test_results_vs_process_groups(df: pd.DataFrame) -> None:
+    t = S.results_vs_process(df[df["Manager"].isin(S.TESTED)], n_resamples=300)
+    assert list(t["group"].unique()) == ["Results", "Process"]
+    assert len(t) == len(S.KEY_METRICS)
+    assert {"d_better", "verdict"} <= set(t.columns)
+
+
+def test_venue_split_has_ci(df: pd.DataFrame) -> None:
+    vs = S.venue_split(df, ["xG"], n_boot=300)
+    assert ((vs["ci_low"] <= vs["mean"]) & (vs["mean"] <= vs["ci_high"])).all()
+    assert vs["n"].sum() == 37
+
+
+def test_xy_means_per_manager(df: pd.DataFrame) -> None:
+    m = S.xy_means(df, "xG", "MU goals", n_boot=300).set_index("Manager")
+    assert set(m.index) == {AMORIM, CARRICK}
+    assert m.at[CARRICK, "n"] == 17
+    assert (m["x_low"] <= m["x_mean"]).all() and (m["y_mean"] <= m["y_high"]).all()
